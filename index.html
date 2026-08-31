@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#eaf4f3">
+  <title>康复训练计时器</title>
+  <style>
+    :root {
+      --pool: #087e8b;
+      --pool-deep: #07324a;
+      --pool-dark: #041f32;
+      --water: #bde8e5;
+      --foam: #f7fbf9;
+      --tile: #eaf4f3;
+      --signal: #f36a32;
+      --signal-dark: #8c2d10;
+      --ink: #08283c;
+      --muted: #3e5d68;
+      --line: #9bcac9;
+      --danger: #a32d20;
+      --shadow: 0 16px 38px rgba(4, 31, 50, 0.16), 0 4px 10px rgba(4, 31, 50, 0.1);
+      --radius: 26px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--tile);
+    }
+
+    body {
+      margin: 0;
+      min-width: 300px;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      background: var(--tile);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before,
+    body::after {
+      position: fixed;
+      z-index: 0;
+      top: 0;
+      bottom: 0;
+      width: 18px;
+      content: "";
+      background-color: var(--foam);
+      background-image: radial-gradient(circle, var(--signal) 0 5px, transparent 5.5px);
+      background-position: center 3px;
+      background-size: 18px 36px;
+      border-inline: 1px solid rgba(7, 50, 74, 0.14);
+      pointer-events: none;
+    }
+
+    body::before {
+      left: 0;
+    }
+
+    body::after {
+      right: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    button:focus-visible {
+      outline: 4px solid var(--pool-dark);
+      outline-offset: 4px;
+    }
+
+    .app-shell {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      width: min(100% - 64px, 920px);
+      min-height: 100dvh;
+      margin: 0 auto;
+      padding: max(24px, env(safe-area-inset-top)) 0 max(22px, env(safe-area-inset-bottom));
+    }
+
+    .site-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 4px 22px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .site-header h1 {
+      max-width: 12ch;
+      margin: 0;
+      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
+      font-size: clamp(2rem, 5vw, 3.45rem);
+      font-weight: 700;
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      text-wrap: balance;
+    }
+
+    .session-formula {
+      flex: 0 0 auto;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(0.88rem, 2vw, 1rem);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-align: right;
+    }
+
+    main {
+      display: grid;
+      align-items: center;
+      padding: clamp(26px, 6vh, 64px) 0;
+    }
+
+    .idle-panel,
+    .running-panel {
+      min-width: 0;
+    }
+
+    .idle-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
+      align-items: stretch;
+      gap: clamp(24px, 5vw, 54px);
+    }
+
+    .idle-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    .idle-copy h2 {
+      max-width: 10ch;
+      margin: 0 0 24px;
+      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
+      font-size: clamp(2.55rem, 7vw, 5.4rem);
+      font-weight: 700;
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      text-wrap: balance;
+    }
+
+    .idle-copy p {
+      max-width: 31rem;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 2vw, 1.16rem);
+      line-height: 1.7;
+    }
+
+    .start-button {
+      position: relative;
+      display: grid;
+      min-height: 300px;
+      overflow: hidden;
+      place-items: center;
+      padding: 34px;
+      border: 0;
+      border-radius: var(--radius);
+      background: var(--signal);
+      box-shadow: var(--shadow);
+      color: var(--pool-dark);
+      cursor: pointer;
+      isolation: isolate;
+      touch-action: manipulation;
+      transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease;
+    }
+
+    .start-button::before {
+      position: absolute;
+      z-index: -1;
+      right: -52px;
+      bottom: -66px;
+      width: 210px;
+      height: 210px;
+      border: 28px solid rgba(247, 251, 249, 0.24);
+      border-radius: 50%;
+      content: "";
+    }
+
+    .start-button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 21px 44px rgba(4, 31, 50, 0.2), 0 6px 12px rgba(4, 31, 50, 0.12);
+    }
+
+    .start-button:active {
+      transform: translateY(1px);
+      box-shadow: 0 10px 26px rgba(4, 31, 50, 0.16), 0 3px 7px rgba(4, 31, 50, 0.1);
+    }
+
+    .start-button:disabled {
+      cursor: wait;
+      filter: saturate(0.55);
+      transform: none;
+    }
+
+    .start-inner {
+      display: grid;
+      justify-items: center;
+      gap: 18px;
+    }
+
+    .start-icon {
+      width: 78px;
+      height: 52px;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 5;
+    }
+
+    .start-label {
+      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .start-note {
+      max-width: 18ch;
+      color: #213b43;
+      font-size: 0.98rem;
+      font-weight: 700;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    .running-panel {
+      display: none;
+      gap: 22px;
+    }
+
+    body[data-mode="running"] .idle-panel {
+      display: none;
+    }
+
+    body[data-mode="running"] .running-panel {
+      display: grid;
+      animation: scoreboard-in 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .scoreboard {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(180px, 0.72fr) minmax(250px, 1fr);
+      min-height: min(48vh, 430px);
+      overflow: hidden;
+      border-radius: var(--radius);
+      background: var(--pool-deep);
+      box-shadow: var(--shadow);
+      color: var(--foam);
+    }
+
+    .scoreboard::after {
+      position: absolute;
+      right: -48px;
+      bottom: -48px;
+      width: 172px;
+      height: 172px;
+      border: 28px solid rgba(189, 232, 229, 0.12);
+      border-radius: 50%;
+      content: "";
+      pointer-events: none;
+    }
+
+    .interval-state {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 28px;
+      padding: clamp(26px, 5vw, 48px);
+      background: var(--pool-dark);
+    }
+
+    .phase-name {
+      margin: 0;
+      color: var(--water);
+      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
+      font-size: clamp(2rem, 6vw, 4.8rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .position-copy {
+      margin: 0;
+      color: #d9eeee;
+      font-size: clamp(1rem, 2.4vw, 1.32rem);
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .clock-field {
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      min-width: 0;
+      padding: clamp(28px, 6vw, 58px);
+      text-align: center;
+    }
+
+    .countdown {
+      margin: 0;
+      font-family: "Avenir Next Condensed", "DIN Condensed", "Arial Narrow", sans-serif;
+      font-size: clamp(5rem, 21vw, 6rem);
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      line-height: 0.82;
+      letter-spacing: -0.04em;
+    }
+
+    .countdown-unit {
+      margin: 22px 0 0;
+      color: var(--water);
+      font-size: 0.92rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+    }
+
+    .next-cue {
+      min-height: 1.5em;
+      margin: 18px 0 0;
+      color: #d9eeee;
+      font-size: 0.96rem;
+      line-height: 1.5;
+    }
+
+    .lane-progress {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px 16px;
+      align-items: center;
+      padding: 4px;
+    }
+
+    .lane-label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .lane-cells {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(16px, 1fr));
+      gap: 7px;
+    }
+
+    .lane-cell {
+      height: 12px;
+      border: 1px solid #659da0;
+      border-radius: 999px;
+      background: var(--foam);
+      transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+
+    .lane-cell[data-state="complete"] {
+      border-color: var(--pool);
+      background: var(--pool);
+    }
+
+    .lane-cell[data-state="active"] {
+      border-color: var(--signal-dark);
+      background: var(--signal);
+      transform: scaleY(1.65);
+    }
+
+    .running-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .audio-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    .audio-status svg {
+      width: 23px;
+      height: 23px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: var(--pool);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2;
+    }
+
+    .reset-button {
+      min-height: 52px;
+      padding: 0 24px;
+      border: 1px solid #6e9da0;
+      border-radius: 999px;
+      background: var(--foam);
+      color: var(--danger);
+      font-weight: 800;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background-color 160ms ease, border-color 160ms ease;
+    }
+
+    .reset-button:hover {
+      border-color: var(--danger);
+      background: #fff3f0;
+    }
+
+    .page-footer {
+      display: grid;
+      gap: 12px;
+      padding: 19px 4px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .foreground-reminder,
+    .compatibility-message {
+      margin: 0;
+      line-height: 1.55;
+    }
+
+    .foreground-reminder {
+      color: var(--ink);
+      font-size: 0.96rem;
+      font-weight: 800;
+    }
+
+    .foreground-reminder strong {
+      color: var(--signal-dark);
+    }
+
+    .compatibility-message {
+      display: none;
+      max-width: 70ch;
+      color: var(--danger);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .compatibility-message[data-visible="true"] {
+      display: block;
+    }
+
+    .debug-badge {
+      display: none;
+      width: fit-content;
+      padding: 5px 9px;
+      border: 1px solid var(--pool);
+      border-radius: 999px;
+      color: var(--pool-deep);
+      font-size: 0.74rem;
+      font-weight: 800;
+    }
+
+    .debug-badge[data-visible="true"] {
+      display: block;
+    }
+
+    @keyframes scoreboard-in {
+      from {
+        clip-path: inset(0 100% 0 0 round var(--radius));
+        filter: blur(7px);
+        transform: translateX(-20px);
+      }
+      to {
+        clip-path: inset(0 0 0 0 round var(--radius));
+        filter: blur(0);
+        transform: translateX(0);
+      }
+    }
+
+    @media (max-width: 700px) {
+      body::before,
+      body::after {
+        width: 10px;
+        background-size: 10px 24px;
+        background-image: radial-gradient(circle, var(--signal) 0 3px, transparent 3.5px);
+      }
+
+      .app-shell {
+        width: min(100% - 40px, 560px);
+        padding-top: max(18px, env(safe-area-inset-top));
+      }
+
+      .site-header {
+        align-items: flex-end;
+        gap: 12px;
+        padding-bottom: 16px;
+      }
+
+      .idle-panel {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
+
+      .idle-copy {
+        min-height: 0;
+      }
+
+      .idle-copy h2 {
+        margin-bottom: 14px;
+      }
+
+      .start-button {
+        min-height: 238px;
+      }
+
+      .scoreboard {
+        grid-template-columns: 1fr;
+        min-height: 440px;
+      }
+
+      .interval-state {
+        min-height: 144px;
+        flex-direction: row;
+        align-items: flex-end;
+        padding: 24px;
+      }
+
+      .clock-field {
+        min-height: 270px;
+        padding: 30px 24px 36px;
+      }
+
+      .phase-name {
+        font-size: clamp(2.4rem, 12vw, 4rem);
+      }
+
+      .position-copy {
+        text-align: right;
+      }
+
+      .running-actions {
+        align-items: flex-start;
+      }
+
+      .audio-status {
+        max-width: 19ch;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .site-header h1 {
+        font-size: 1.85rem;
+      }
+
+      .session-formula {
+        font-size: 0.77rem;
+      }
+
+      main {
+        padding: 24px 0;
+      }
+
+      .idle-copy h2 {
+        font-size: 2.6rem;
+      }
+
+      .start-label {
+        font-size: 3rem;
+      }
+
+      .lane-progress {
+        gap: 10px;
+      }
+
+      .lane-cells {
+        gap: 5px;
+      }
+
+      .reset-button {
+        padding-inline: 18px;
+      }
+    }
+
+    @media (max-height: 650px) and (orientation: landscape) {
+      .app-shell {
+        min-height: 100vh;
+        padding-block: 12px;
+      }
+
+      .site-header {
+        padding-bottom: 10px;
+      }
+
+      main {
+        padding-block: 14px;
+      }
+
+      .idle-panel {
+        grid-template-columns: 1fr 0.75fr;
+      }
+
+      .idle-copy,
+      .start-button {
+        min-height: 210px;
+      }
+
+      .scoreboard {
+        grid-template-columns: 0.7fr 1fr;
+        min-height: 260px;
+      }
+
+      .interval-state {
+        min-height: 0;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .clock-field {
+        min-height: 0;
+        padding-block: 28px;
+      }
+
+      .page-footer {
+        padding-top: 10px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+<body data-mode="idle">
+  <!--
+    THESIS: A pool-deck pace board turns one prescribed rehab sequence into an unmistakable audible lane, refusing the generic circular timer.
+    OWN-WORLD: Chlorine tile, deep lane blue, safety orange, rope markers, split-time bars, and broad scoreboard digits form the complete control language.
+    STORY: One tap arms voice and sound, every beep starts the named interval, and the fixed lane ends without surprise.
+    FIRST VIEWPORT: A plain-language promise faces one oversized orange Start block; while running, group and rep occupy the dark lane beside the dominant countdown.
+    FORM: Aquatic therapy pace board, grounded direction 6, seed bce5306d.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <div class="app-shell">
+    <header class="site-header">
+      <h1>康复训练计时器</h1>
+      <p class="session-formula">2 组 × 6 次<br>训练 15 秒 · 休息 5 秒</p>
+    </header>
+
+    <main>
+      <section class="idle-panel" aria-labelledby="idle-title">
+        <div class="idle-copy">
+          <h2 id="idle-title">点一次，之后只需听。</h2>
+          <p>每个阶段会先用中文播报，再以提示音作为计时零点。请先调高媒体音量。</p>
+        </div>
+
+        <button class="start-button" id="startButton" type="button">
+          <span class="start-inner">
+            <svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true">
+              <path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/>
+            </svg>
+            <span class="start-label">开始训练</span>
+            <span class="start-note">一次点击解锁语音和提示音</span>
+          </span>
+        </button>
+      </section>
+
+      <section class="running-panel" aria-label="训练计时状态">
+        <div class="scoreboard">
+          <div class="interval-state">
+            <p class="phase-name" id="phaseName">准备</p>
+            <p class="position-copy" id="positionCopy">正在播报开始提示</p>
+          </div>
+          <div class="clock-field">
+            <p class="countdown" id="countdown">15</p>
+            <p class="countdown-unit" id="countdownUnit">秒</p>
+            <p class="next-cue" id="nextCue">提示音响起后开始计时</p>
+          </div>
+        </div>
+
+        <div class="lane-progress" id="laneProgress" aria-label="训练进度"></div>
+
+        <div class="running-actions">
+          <p class="audio-status">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 10v4h4l5 4V6L8 10H4Z"/>
+              <path d="M16 9c1 .8 1.5 1.8 1.5 3S17 14.2 16 15"/>
+              <path d="M18.5 6.5c1.8 1.5 2.7 3.3 2.7 5.5s-.9 4-2.7 5.5"/>
+            </svg>
+            <span id="audioStatusText">语音与提示音已启用</span>
+          </p>
+          <button class="reset-button" id="resetButton" type="button">停止并重置</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p class="foreground-reminder"><strong>训练时请勿锁屏，也不要切换 App。</strong> 页面会在浏览器允许时保持屏幕常亮。</p>
+      <p class="compatibility-message" id="compatibilityMessage" role="alert" data-visible="false"></p>
+      <span class="debug-badge" id="debugBadge" data-visible="false">调试计时</span>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const params = new URLSearchParams(window.location.search);
+      const requestedDebugUnit = Number(params.get("debugMs"));
+      const isDebug = Number.isFinite(requestedDebugUnit) && requestedDebugUnit >= 20 && requestedDebugUnit < 1000;
+      const unitMs = isDebug ? requestedDebugUnit : 1000;
+      const workMs = 15 * unitMs;
+      const shortRestMs = 5 * unitMs;
+      const groupRestMs = 60 * unitMs;
+      const beepDurationSeconds = 0.16;
+      const beepFrequency = 880;
+      const plan = [];
+      let planCursor = 0;
+
+      const addInterval = (kind, group, rep, durationMs, cue) => {
+        plan.push({
+          index: plan.length,
+          kind,
+          group,
+          rep,
+          durationMs,
+          startMs: planCursor,
+          endMs: planCursor + durationMs,
+          cue
+        });
+        planCursor += durationMs;
+      };
+
+      for (let group = 1; group <= 2; group += 1) {
+        for (let rep = 1; rep <= 6; rep += 1) {
+          addInterval("work", group, rep, workMs, `第 ${group} 组，第 ${rep} 次，开始`);
+          if (rep < 6) {
+            addInterval("rest", group, rep, shortRestMs, "休息");
+          }
+        }
+
+        if (group === 1) {
+          addInterval("group-rest", 1, 6, groupRestMs, "组间休息一分钟");
+        }
+      }
+
+      const totalDurationMs = planCursor;
+      const events = [];
+      const startButton = document.querySelector("#startButton");
+      const resetButton = document.querySelector("#resetButton");
+      const phaseName = document.querySelector("#phaseName");
+      const positionCopy = document.querySelector("#positionCopy");
+      const countdown = document.querySelector("#countdown");
+      const countdownUnit = document.querySelector("#countdownUnit");
+      const nextCue = document.querySelector("#nextCue");
+      const laneProgress = document.querySelector("#laneProgress");
+      const audioStatusText = document.querySelector("#audioStatusText");
+      const compatibilityMessage = document.querySelector("#compatibilityMessage");
+      const debugBadge = document.querySelector("#debugBadge");
+
+      let audioContext = null;
+      let audioResumePromise = null;
+      let sessionAudioT0 = null;
+      let sessionPerfT0 = null;
+      let schedulerId = null;
+      let animationFrameId = null;
+      let wakeLock = null;
+      let runId = 0;
+      let runState = "idle";
+      let scheduledNodes = [];
+      let launchedCueJobs = new Set();
+      let announcedIntervals = new Set();
+      let completionStarted = false;
+      let lastRenderedInterval = -1;
+      let chineseVoice = null;
+
+      const logEvent = (type, details = {}) => {
+        events.push({
+          type,
+          at: performance.now(),
+          elapsedMs: sessionPerfT0 === null ? null : performance.now() - sessionPerfT0,
+          ...details
+        });
+      };
+
+      const selectChineseVoice = () => {
+        const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+        chineseVoice = voices.find((voice) => /^zh[-_]/i.test(voice.lang)) ||
+          voices.find((voice) => /Chinese|中文|普通话|Mandarin/i.test(voice.name)) ||
+          null;
+      };
+
+      if ("speechSynthesis" in window) {
+        selectChineseVoice();
+        window.speechSynthesis.addEventListener("voiceschanged", selectChineseVoice);
+      }
+
+      const buildLaneProgress = () => {
+        laneProgress.replaceChildren();
+        for (let group = 1; group <= 2; group += 1) {
+          const label = document.createElement("span");
+          label.className = "lane-label";
+          label.textContent = `第 ${group} 组`;
+          const cells = document.createElement("div");
+          cells.className = "lane-cells";
+          cells.dataset.group = String(group);
+          for (let rep = 1; rep <= 6; rep += 1) {
+            const cell = document.createElement("span");
+            cell.className = "lane-cell";
+            cell.dataset.group = String(group);
+            cell.dataset.rep = String(rep);
+            cell.dataset.state = "pending";
+            cell.setAttribute("aria-hidden", "true");
+            cells.append(cell);
+          }
+          laneProgress.append(label, cells);
+        }
+      };
+
+      const updateLaneProgress = (activeInterval) => {
+        document.querySelectorAll(".lane-cell").forEach((cell) => {
+          const group = Number(cell.dataset.group);
+          const rep = Number(cell.dataset.rep);
+          let state = "pending";
+
+          if (activeInterval) {
+            if (group < activeInterval.group || (group === activeInterval.group && rep < activeInterval.rep)) {
+              state = "complete";
+            } else if (group === activeInterval.group && rep === activeInterval.rep && activeInterval.kind === "work") {
+              state = "active";
+            }
+          }
+
+          cell.dataset.state = state;
+        });
+      };
+
+      const setError = (message) => {
+        compatibilityMessage.textContent = message;
+        compatibilityMessage.dataset.visible = "true";
+      };
+
+      const clearError = () => {
+        compatibilityMessage.textContent = "";
+        compatibilityMessage.dataset.visible = "false";
+      };
+
+      const requestWakeLock = async () => {
+        if (!("wakeLock" in navigator) || document.visibilityState !== "visible") {
+          return;
+        }
+
+        try {
+          wakeLock = await navigator.wakeLock.request("screen");
+          logEvent("wake-lock", { state: "acquired" });
+          wakeLock.addEventListener("release", () => {
+            logEvent("wake-lock", { state: "released" });
+          }, { once: true });
+        } catch (error) {
+          logEvent("wake-lock", { state: "unavailable", error: String(error) });
+        }
+      };
+
+      const releaseWakeLock = async () => {
+        if (!wakeLock) {
+          return;
+        }
+
+        try {
+          await wakeLock.release();
+        } catch (error) {
+          logEvent("wake-lock", { state: "release-error", error: String(error) });
+        } finally {
+          wakeLock = null;
+        }
+      };
+
+      const unlockAudio = () => {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+          throw new Error("此浏览器不支持 Web Audio 提示音。");
+        }
+
+        if (!audioContext || audioContext.state === "closed") {
+          audioContext = new AudioContextClass();
+        }
+
+        audioResumePromise = audioContext.resume();
+
+        const silentBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+        const silentSource = audioContext.createBufferSource();
+        silentSource.buffer = silentBuffer;
+        silentSource.connect(audioContext.destination);
+        silentSource.start();
+        logEvent("audio-unlock-request", { state: audioContext.state });
+      };
+
+      const createUtterance = (text, currentRun, metadata = {}) => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "zh-CN";
+        utterance.rate = isDebug ? 2 : 1.16;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        if (chineseVoice) {
+          utterance.voice = chineseVoice;
+        }
+
+        utterance.addEventListener("start", () => {
+          if (runId === currentRun) {
+            logEvent("speech-start", { cue: text, ...metadata });
+          }
+        });
+
+        utterance.addEventListener("end", () => {
+          if (runId === currentRun) {
+            logEvent("speech-end", { cue: text, ...metadata });
+          }
+        });
+
+        return utterance;
+      };
+
+      const speakScheduledCue = (interval, currentRun) => {
+        if (runId !== currentRun || runState !== "running") {
+          return;
+        }
+
+        const utterance = createUtterance(interval.cue, currentRun, {
+          intervalIndex: interval.index,
+          plannedOffsetMs: interval.startMs
+        });
+
+        utterance.addEventListener("error", (event) => {
+          if (runId === currentRun && event.error !== "canceled" && event.error !== "interrupted") {
+            setError("语音播放失败。请停止并重置，然后检查设备音量后重试。");
+            logEvent("speech-error", { cue: interval.cue, error: event.error });
+          }
+        });
+
+        logEvent("speech-request", {
+          cue: interval.cue,
+          intervalIndex: interval.index,
+          plannedOffsetMs: interval.startMs
+        });
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const cueLeadMs = (interval) => {
+        const previousInterval = plan[interval.index - 1];
+        const estimatedSpeechMs = 900 + Array.from(interval.cue).length * 135 + 650;
+        return Math.min(previousInterval.durationMs * 0.7, estimatedSpeechMs);
+      };
+
+      const scheduleBeep = (interval, currentRun) => {
+        const startAt = sessionAudioT0 + interval.startMs / 1000;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(beepFrequency, startAt);
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.34, startAt + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + beepDurationSeconds);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(startAt);
+        oscillator.stop(startAt + beepDurationSeconds + 0.01);
+        scheduledNodes.push({ oscillator, gain });
+        logEvent("beep-scheduled", {
+          intervalIndex: interval.index,
+          plannedOffsetMs: interval.startMs,
+          audioTime: startAt,
+          run: currentRun
+        });
+      };
+
+      const cancelScheduledAudio = () => {
+        scheduledNodes.forEach(({ oscillator }) => {
+          try {
+            oscillator.stop();
+          } catch (error) {
+            // The oscillator may already have stopped.
+          }
+        });
+        scheduledNodes = [];
+      };
+
+      const renderInterval = (interval, elapsedMs) => {
+        const remainingMs = Math.max(0, interval.endMs - elapsedMs);
+        const remainingUnits = Math.ceil(remainingMs / unitMs);
+        countdown.textContent = String(remainingUnits);
+        countdownUnit.textContent = "秒";
+
+        if (interval.kind === "work") {
+          phaseName.textContent = "训练";
+          positionCopy.textContent = `第 ${interval.group} 组 · 第 ${interval.rep} 次`;
+        } else if (interval.kind === "rest") {
+          phaseName.textContent = "休息";
+          positionCopy.textContent = `第 ${interval.group} 组 · 第 ${interval.rep} 次完成`;
+        } else {
+          phaseName.textContent = "组间休息";
+          positionCopy.textContent = "第 1 组完成 · 下一组即将开始";
+        }
+
+        const upcoming = plan[interval.index + 1];
+        if (!upcoming) {
+          nextCue.textContent = "本次训练即将完成";
+        } else if (upcoming.kind === "work") {
+          nextCue.textContent = `下一阶段：第 ${upcoming.group} 组，第 ${upcoming.rep} 次`;
+        } else if (upcoming.kind === "group-rest") {
+          nextCue.textContent = "本次结束后直接进入一分钟组间休息";
+        } else {
+          nextCue.textContent = "本次结束后休息 5 秒";
+        }
+
+        if (lastRenderedInterval !== interval.index) {
+          updateLaneProgress(interval);
+          lastRenderedInterval = interval.index;
+        }
+      };
+
+      const renderFrame = () => {
+        if (runState !== "running" || sessionPerfT0 === null) {
+          return;
+        }
+
+        const elapsedMs = performance.now() - sessionPerfT0;
+        if (elapsedMs < 0) {
+          animationFrameId = requestAnimationFrame(renderFrame);
+          return;
+        }
+
+        const activeInterval = plan.find((interval) => elapsedMs >= interval.startMs && elapsedMs < interval.endMs);
+        if (activeInterval) {
+          renderInterval(activeInterval, elapsedMs);
+        }
+
+        animationFrameId = requestAnimationFrame(renderFrame);
+      };
+
+      const finalizeSession = (currentRun) => {
+        if (runId !== currentRun) {
+          return;
+        }
+
+        runState = "finished";
+        clearInterval(schedulerId);
+        schedulerId = null;
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        phaseName.textContent = "训练完成";
+        positionCopy.textContent = "2 组 · 12 次全部完成";
+        countdown.textContent = "✓";
+        countdownUnit.textContent = "";
+        nextCue.textContent = "可以停止并重置，准备下一次训练";
+        audioStatusText.textContent = "训练结束语音已播放";
+        updateLaneProgress({ group: 3, rep: 1, kind: "work" });
+        logEvent("session-finished", { plannedOffsetMs: totalDurationMs });
+        releaseWakeLock();
+      };
+
+      const announceCompletion = (currentRun) => {
+        if (completionStarted || runId !== currentRun || runState !== "running") {
+          return;
+        }
+
+        completionStarted = true;
+        runState = "finishing";
+        clearInterval(schedulerId);
+        schedulerId = null;
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        phaseName.textContent = "训练完成";
+        positionCopy.textContent = "正在播报结束提示";
+        countdown.textContent = "0";
+        countdownUnit.textContent = "秒";
+        nextCue.textContent = "没有额外休息";
+
+        const utterance = createUtterance("训练结束", currentRun, {
+          kind: "completion",
+          plannedOffsetMs: totalDurationMs
+        });
+        utterance.addEventListener("end", () => finalizeSession(currentRun), { once: true });
+        utterance.addEventListener("error", (event) => {
+          if (runId === currentRun && event.error !== "canceled" && event.error !== "interrupted") {
+            setError("结束语音播放失败，但训练计时已经停止。");
+            logEvent("speech-error", { cue: "训练结束", error: event.error });
+            finalizeSession(currentRun);
+          }
+        }, { once: true });
+        logEvent("speech-request", {
+          cue: "训练结束",
+          kind: "completion",
+          plannedOffsetMs: totalDurationMs
+        });
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const schedulerTick = (currentRun) => {
+        if (runId !== currentRun || runState !== "running" || sessionPerfT0 === null) {
+          return;
+        }
+
+        const elapsedMs = performance.now() - sessionPerfT0;
+
+        for (const interval of plan) {
+          if (!announcedIntervals.has(interval.index) && elapsedMs >= interval.startMs) {
+            announcedIntervals.add(interval.index);
+            logEvent("beep-boundary", {
+              intervalIndex: interval.index,
+              kind: interval.kind,
+              group: interval.group,
+              rep: interval.rep,
+              plannedOffsetMs: interval.startMs,
+              timingErrorMs: elapsedMs - interval.startMs
+            });
+            logEvent("interval-start", {
+              intervalIndex: interval.index,
+              kind: interval.kind,
+              group: interval.group,
+              rep: interval.rep,
+              plannedOffsetMs: interval.startMs
+            });
+          }
+        }
+
+        for (const interval of plan.slice(1)) {
+          const cueAt = interval.startMs - cueLeadMs(interval);
+          if (!launchedCueJobs.has(interval.index) && elapsedMs >= cueAt) {
+            launchedCueJobs.add(interval.index);
+            speakScheduledCue(interval, currentRun);
+          }
+        }
+
+        if (elapsedMs >= totalDurationMs) {
+          announceCompletion(currentRun);
+        }
+      };
+
+      const beginTimeline = (currentRun) => {
+        if (runId !== currentRun || runState !== "preparing") {
+          return;
+        }
+
+        runState = "running";
+        const leadSeconds = 0.06;
+        sessionAudioT0 = audioContext.currentTime + leadSeconds;
+        sessionPerfT0 = performance.now() + leadSeconds * 1000;
+        plan.forEach((interval) => scheduleBeep(interval, currentRun));
+        audioStatusText.textContent = "语音与提示音已启用";
+        logEvent("session-t0-set", {
+          audioTime: sessionAudioT0,
+          perfTime: sessionPerfT0,
+          intervalCount: plan.length
+        });
+        schedulerId = window.setInterval(() => schedulerTick(currentRun), 20);
+        animationFrameId = requestAnimationFrame(renderFrame);
+      };
+
+      const resetSession = () => {
+        runId += 1;
+        runState = "idle";
+        clearInterval(schedulerId);
+        schedulerId = null;
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+        window.speechSynthesis?.cancel();
+        cancelScheduledAudio();
+        releaseWakeLock();
+        sessionAudioT0 = null;
+        sessionPerfT0 = null;
+        launchedCueJobs = new Set();
+        announcedIntervals = new Set();
+        completionStarted = false;
+        lastRenderedInterval = -1;
+        startButton.disabled = false;
+        startButton.querySelector(".start-label").textContent = "开始训练";
+        document.body.dataset.mode = "idle";
+        document.title = "康复训练计时器";
+        clearError();
+        buildLaneProgress();
+        logEvent("reset");
+      };
+
+      const startSession = () => {
+        if (runState !== "idle") {
+          return;
+        }
+
+        clearError();
+        if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+          setError("此浏览器不支持中文语音播报，请更换支持 Web Speech 的浏览器。");
+          return;
+        }
+
+        const currentRun = ++runId;
+        runState = "preparing";
+        startButton.disabled = true;
+        startButton.querySelector(".start-label").textContent = "正在准备";
+        document.body.dataset.mode = "running";
+        phaseName.textContent = "准备";
+        positionCopy.textContent = "正在播报开始提示";
+        countdown.textContent = "15";
+        countdownUnit.textContent = "秒";
+        nextCue.textContent = "提示音响起后开始计时";
+        audioStatusText.textContent = "正在解锁语音与提示音";
+        launchedCueJobs = new Set();
+        announcedIntervals = new Set();
+        completionStarted = false;
+        lastRenderedInterval = -1;
+        buildLaneProgress();
+
+        try {
+          unlockAudio();
+        } catch (error) {
+          runState = "idle";
+          document.body.dataset.mode = "idle";
+          startButton.disabled = false;
+          startButton.querySelector(".start-label").textContent = "开始训练";
+          setError(error.message || "提示音初始化失败，请更换浏览器后重试。");
+          return;
+        }
+
+        requestWakeLock();
+        window.speechSynthesis.cancel();
+        const firstInterval = plan[0];
+        const utterance = createUtterance(firstInterval.cue, currentRun, {
+          intervalIndex: 0,
+          plannedOffsetMs: 0,
+          unlockCue: true
+        });
+
+        utterance.addEventListener("end", () => {
+          if (runId !== currentRun) {
+            return;
+          }
+          Promise.resolve(audioResumePromise).then(() => beginTimeline(currentRun));
+        }, { once: true });
+
+        utterance.addEventListener("error", (event) => {
+          if (runId !== currentRun || event.error === "canceled" || event.error === "interrupted") {
+            return;
+          }
+          runState = "idle";
+          document.body.dataset.mode = "idle";
+          startButton.disabled = false;
+          startButton.querySelector(".start-label").textContent = "重新开始";
+          setError("语音没有成功播放。请确认设备未静音，然后再次点开始。");
+          logEvent("speech-error", { cue: firstInterval.cue, error: event.error, unlockCue: true });
+          releaseWakeLock();
+        }, { once: true });
+
+        logEvent("speech-request", {
+          cue: firstInterval.cue,
+          intervalIndex: 0,
+          plannedOffsetMs: 0,
+          unlockCue: true
+        });
+        window.speechSynthesis.speak(utterance);
+      };
+
+      startButton.addEventListener("click", startSession);
+      resetButton.addEventListener("click", resetSession);
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && (runState === "running" || runState === "preparing" || runState === "finishing")) {
+          document.title = "康复训练计时器";
+          requestWakeLock();
+        } else if (document.visibilityState === "hidden" && runState !== "idle") {
+          document.title = "请返回训练计时器";
+          logEvent("visibility-warning", { state: "hidden" });
+        }
+      });
+
+      buildLaneProgress();
+      if (isDebug) {
+        debugBadge.dataset.visible = "true";
+        debugBadge.textContent = `调试计时：1 秒 = ${unitMs} 毫秒`;
+      }
+
+      window.__rehabTimer = {
+        config: {
+          debug: isDebug,
+          unitMs,
+          workMs,
+          shortRestMs,
+          groupRestMs,
+          totalDurationMs
+        },
+        events,
+        getPlan: () => plan.map((interval) => ({ ...interval })),
+        getState: () => ({
+          runState,
+          audioState: audioContext ? audioContext.state : "not-created",
+          sessionAudioT0,
+          sessionPerfT0,
+          wakeLockActive: Boolean(wakeLock),
+          queuedSpeech: window.speechSynthesis ? window.speechSynthesis.pending : false,
+          speaking: window.speechSynthesis ? window.speechSynthesis.speaking : false
+        }),
+        reset: resetSession
+      };
+    })();
+  </script>
+</body>
+</html>
