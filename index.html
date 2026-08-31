@@ -686,12 +686,12 @@
         <div class="scoreboard">
           <div class="interval-state">
             <p class="phase-name" id="phaseName">准备</p>
-            <p class="position-copy" id="positionCopy">正在播报开始提示</p>
+            <p class="position-copy" id="positionCopy">正在播报准备提示</p>
           </div>
           <div class="clock-field">
-            <p class="countdown" id="countdown">15</p>
+            <p class="countdown" id="countdown">30</p>
             <p class="countdown-unit" id="countdownUnit">秒</p>
-            <p class="next-cue" id="nextCue">提示音响起后开始计时</p>
+            <p class="next-cue" id="nextCue">提示音响起后开始 30 秒准备</p>
           </div>
         </div>
 
@@ -726,6 +726,7 @@
       const requestedDebugUnit = Number(params.get("debugMs"));
       const isDebug = Number.isFinite(requestedDebugUnit) && requestedDebugUnit >= 20 && requestedDebugUnit < 1000;
       const unitMs = isDebug ? requestedDebugUnit : 1000;
+      const prepMs = 30 * unitMs;
       const workMs = 15 * unitMs;
       const shortRestMs = 5 * unitMs;
       const groupRestMs = 60 * unitMs;
@@ -747,6 +748,8 @@
         });
         planCursor += durationMs;
       };
+
+      addInterval("prep", null, null, prepMs, "准备，30秒");
 
       for (let group = 1; group <= 2; group += 1) {
         for (let rep = 1; rep <= 6; rep += 1) {
@@ -788,6 +791,8 @@
       let launchedCueJobs = new Set();
       let announcedIntervals = new Set();
       let completionStarted = false;
+      let firstWorkCueStarted = false;
+      let trainingDelayMs = null;
       let lastRenderedInterval = -1;
       let chineseVoice = null;
 
@@ -840,7 +845,7 @@
           const rep = Number(cell.dataset.rep);
           let state = "pending";
 
-          if (activeInterval) {
+          if (activeInterval && activeInterval.kind !== "prep") {
             if (group < activeInterval.group || (group === activeInterval.group && rep < activeInterval.rep)) {
               state = "complete";
             } else if (group === activeInterval.group && rep === activeInterval.rep && activeInterval.kind === "work") {
@@ -938,14 +943,26 @@
         return utterance;
       };
 
+      const runtimeStartMs = (interval) => {
+        if (interval.kind === "prep") {
+          return interval.startMs;
+        }
+        return trainingDelayMs === null ? Infinity : interval.startMs + trainingDelayMs;
+      };
+
+      const runtimeEndMs = (interval) => runtimeStartMs(interval) + interval.durationMs;
+      const runtimeTotalDurationMs = () => trainingDelayMs === null ? Infinity : totalDurationMs + trainingDelayMs;
+
       const speakScheduledCue = (interval, currentRun) => {
         if (runId !== currentRun || runState !== "running") {
           return;
         }
 
+        const scheduledOffsetMs = runtimeStartMs(interval);
         const utterance = createUtterance(interval.cue, currentRun, {
           intervalIndex: interval.index,
-          plannedOffsetMs: interval.startMs
+          plannedOffsetMs: interval.startMs,
+          scheduledOffsetMs
         });
 
         utterance.addEventListener("error", (event) => {
@@ -958,7 +975,8 @@
         logEvent("speech-request", {
           cue: interval.cue,
           intervalIndex: interval.index,
-          plannedOffsetMs: interval.startMs
+          plannedOffsetMs: interval.startMs,
+          scheduledOffsetMs
         });
         window.speechSynthesis.speak(utterance);
       };
@@ -970,7 +988,8 @@
       };
 
       const scheduleBeep = (interval, currentRun) => {
-        const startAt = sessionAudioT0 + interval.startMs / 1000;
+        const scheduledOffsetMs = runtimeStartMs(interval);
+        const startAt = sessionAudioT0 + scheduledOffsetMs / 1000;
         const oscillator = audioContext.createOscillator();
         const gain = audioContext.createGain();
         oscillator.type = "sine";
@@ -985,7 +1004,9 @@
         scheduledNodes.push({ oscillator, gain });
         logEvent("beep-scheduled", {
           intervalIndex: interval.index,
+          kind: interval.kind,
           plannedOffsetMs: interval.startMs,
+          scheduledOffsetMs,
           audioTime: startAt,
           run: currentRun
         });
@@ -1003,12 +1024,15 @@
       };
 
       const renderInterval = (interval, elapsedMs) => {
-        const remainingMs = Math.max(0, interval.endMs - elapsedMs);
+        const remainingMs = Math.max(0, runtimeEndMs(interval) - elapsedMs);
         const remainingUnits = Math.ceil(remainingMs / unitMs);
         countdown.textContent = String(remainingUnits);
         countdownUnit.textContent = "秒";
 
-        if (interval.kind === "work") {
+        if (interval.kind === "prep") {
+          phaseName.textContent = "准备";
+          positionCopy.textContent = "30 秒准备时间";
+        } else if (interval.kind === "work") {
           phaseName.textContent = "训练";
           positionCopy.textContent = `第 ${interval.group} 组 · 第 ${interval.rep} 次`;
         } else if (interval.kind === "rest") {
@@ -1022,6 +1046,8 @@
         const upcoming = plan[interval.index + 1];
         if (!upcoming) {
           nextCue.textContent = "本次训练即将完成";
+        } else if (interval.kind === "prep") {
+          nextCue.textContent = "倒计时结束后播报第 1 组开始提示";
         } else if (upcoming.kind === "work") {
           nextCue.textContent = `下一阶段：第 ${upcoming.group} 组，第 ${upcoming.rep} 次`;
         } else if (upcoming.kind === "group-rest") {
@@ -1047,7 +1073,10 @@
           return;
         }
 
-        const activeInterval = plan.find((interval) => elapsedMs >= interval.startMs && elapsedMs < interval.endMs);
+        const activeInterval = plan.find((interval) => {
+          const startMs = runtimeStartMs(interval);
+          return elapsedMs >= startMs && elapsedMs < runtimeEndMs(interval);
+        });
         if (activeInterval) {
           renderInterval(activeInterval, elapsedMs);
         }
@@ -1072,7 +1101,10 @@
         nextCue.textContent = "可以停止并重置，准备下一次训练";
         audioStatusText.textContent = "训练结束语音已播放";
         updateLaneProgress({ group: 3, rep: 1, kind: "work" });
-        logEvent("session-finished", { plannedOffsetMs: totalDurationMs });
+        logEvent("session-finished", {
+          plannedOffsetMs: totalDurationMs,
+          scheduledOffsetMs: runtimeTotalDurationMs()
+        });
         releaseWakeLock();
       };
 
@@ -1093,9 +1125,11 @@
         countdownUnit.textContent = "秒";
         nextCue.textContent = "没有额外休息";
 
+        const completionOffsetMs = runtimeTotalDurationMs();
         const utterance = createUtterance("训练结束", currentRun, {
           kind: "completion",
-          plannedOffsetMs: totalDurationMs
+          plannedOffsetMs: totalDurationMs,
+          scheduledOffsetMs: completionOffsetMs
         });
         utterance.addEventListener("end", () => finalizeSession(currentRun), { once: true });
         utterance.addEventListener("error", (event) => {
@@ -1108,7 +1142,74 @@
         logEvent("speech-request", {
           cue: "训练结束",
           kind: "completion",
-          plannedOffsetMs: totalDurationMs
+          plannedOffsetMs: totalDurationMs,
+          scheduledOffsetMs: completionOffsetMs
+        });
+        window.speechSynthesis.speak(utterance);
+      };
+
+      const announceFirstWork = (currentRun) => {
+        if (firstWorkCueStarted || runId !== currentRun || runState !== "running") {
+          return;
+        }
+
+        firstWorkCueStarted = true;
+        const firstWork = plan[1];
+        launchedCueJobs.add(firstWork.index);
+        phaseName.textContent = "准备完成";
+        positionCopy.textContent = "正在播报第 1 组开始提示";
+        countdown.textContent = "0";
+        countdownUnit.textContent = "秒";
+        nextCue.textContent = "提示音响起后开始 15 秒训练";
+        audioStatusText.textContent = "准备完成，正在播报训练提示";
+
+        const utterance = createUtterance(firstWork.cue, currentRun, {
+          intervalIndex: firstWork.index,
+          plannedOffsetMs: firstWork.startMs,
+          prepTransition: true
+        });
+
+        utterance.addEventListener("end", () => {
+          if (runId !== currentRun || runState !== "running" || trainingDelayMs !== null) {
+            return;
+          }
+
+          const leadSeconds = 0.06;
+          const firstWorkAudioTime = audioContext.currentTime + leadSeconds;
+          trainingDelayMs = (firstWorkAudioTime - sessionAudioT0) * 1000 - firstWork.startMs;
+          plan.slice(1).forEach((interval) => scheduleBeep(interval, currentRun));
+          audioStatusText.textContent = "语音与提示音已启用";
+          logEvent("training-t0-set", {
+            audioTime: firstWorkAudioTime,
+            perfTime: sessionPerfT0 + runtimeStartMs(firstWork),
+            scheduledOffsetMs: runtimeStartMs(firstWork),
+            trainingIntervalCount: plan.length - 1
+          });
+        }, { once: true });
+
+        utterance.addEventListener("error", (event) => {
+          if (runId !== currentRun || event.error === "canceled" || event.error === "interrupted") {
+            return;
+          }
+          runState = "error";
+          clearInterval(schedulerId);
+          schedulerId = null;
+          cancelAnimationFrame(animationFrameId);
+          animationFrameId = null;
+          cancelScheduledAudio();
+          phaseName.textContent = "无法开始";
+          positionCopy.textContent = "第 1 组开始提示播放失败";
+          nextCue.textContent = "请停止并重置，然后检查设备音量后重试";
+          setError("训练开始语音没有成功播放。请停止并重置，然后检查设备音量后重试。");
+          logEvent("speech-error", { cue: firstWork.cue, error: event.error, prepTransition: true });
+          releaseWakeLock();
+        }, { once: true });
+
+        logEvent("speech-request", {
+          cue: firstWork.cue,
+          intervalIndex: firstWork.index,
+          plannedOffsetMs: firstWork.startMs,
+          prepTransition: true
         });
         window.speechSynthesis.speak(utterance);
       };
@@ -1121,7 +1222,8 @@
         const elapsedMs = performance.now() - sessionPerfT0;
 
         for (const interval of plan) {
-          if (!announcedIntervals.has(interval.index) && elapsedMs >= interval.startMs) {
+          const scheduledOffsetMs = runtimeStartMs(interval);
+          if (!announcedIntervals.has(interval.index) && elapsedMs >= scheduledOffsetMs) {
             announcedIntervals.add(interval.index);
             logEvent("beep-boundary", {
               intervalIndex: interval.index,
@@ -1129,27 +1231,37 @@
               group: interval.group,
               rep: interval.rep,
               plannedOffsetMs: interval.startMs,
-              timingErrorMs: elapsedMs - interval.startMs
+              scheduledOffsetMs,
+              timingErrorMs: elapsedMs - scheduledOffsetMs
             });
             logEvent("interval-start", {
               intervalIndex: interval.index,
               kind: interval.kind,
               group: interval.group,
               rep: interval.rep,
-              plannedOffsetMs: interval.startMs
+              plannedOffsetMs: interval.startMs,
+              scheduledOffsetMs
             });
           }
         }
 
-        for (const interval of plan.slice(1)) {
-          const cueAt = interval.startMs - cueLeadMs(interval);
+        if (!firstWorkCueStarted && elapsedMs >= plan[0].endMs) {
+          announceFirstWork(currentRun);
+        }
+
+        if (trainingDelayMs === null) {
+          return;
+        }
+
+        for (const interval of plan.slice(2)) {
+          const cueAt = runtimeStartMs(interval) - cueLeadMs(interval);
           if (!launchedCueJobs.has(interval.index) && elapsedMs >= cueAt) {
             launchedCueJobs.add(interval.index);
             speakScheduledCue(interval, currentRun);
           }
         }
 
-        if (elapsedMs >= totalDurationMs) {
+        if (elapsedMs >= runtimeTotalDurationMs()) {
           announceCompletion(currentRun);
         }
       };
@@ -1163,7 +1275,7 @@
         const leadSeconds = 0.06;
         sessionAudioT0 = audioContext.currentTime + leadSeconds;
         sessionPerfT0 = performance.now() + leadSeconds * 1000;
-        plan.forEach((interval) => scheduleBeep(interval, currentRun));
+        scheduleBeep(plan[0], currentRun);
         audioStatusText.textContent = "语音与提示音已启用";
         logEvent("session-t0-set", {
           audioTime: sessionAudioT0,
@@ -1189,6 +1301,8 @@
         launchedCueJobs = new Set();
         announcedIntervals = new Set();
         completionStarted = false;
+        firstWorkCueStarted = false;
+        trainingDelayMs = null;
         lastRenderedInterval = -1;
         startButton.disabled = false;
         startButton.querySelector(".start-label").textContent = "开始训练";
@@ -1216,14 +1330,16 @@
         startButton.querySelector(".start-label").textContent = "正在准备";
         document.body.dataset.mode = "running";
         phaseName.textContent = "准备";
-        positionCopy.textContent = "正在播报开始提示";
-        countdown.textContent = "15";
+        positionCopy.textContent = "正在播报准备提示";
+        countdown.textContent = "30";
         countdownUnit.textContent = "秒";
-        nextCue.textContent = "提示音响起后开始计时";
+        nextCue.textContent = "提示音响起后开始 30 秒准备";
         audioStatusText.textContent = "正在解锁语音与提示音";
         launchedCueJobs = new Set();
         announcedIntervals = new Set();
         completionStarted = false;
+        firstWorkCueStarted = false;
+        trainingDelayMs = null;
         lastRenderedInterval = -1;
         buildLaneProgress();
 
@@ -1242,8 +1358,8 @@
         window.speechSynthesis.cancel();
         const firstInterval = plan[0];
         const utterance = createUtterance(firstInterval.cue, currentRun, {
-          intervalIndex: 0,
-          plannedOffsetMs: 0,
+          intervalIndex: firstInterval.index,
+          plannedOffsetMs: firstInterval.startMs,
           unlockCue: true
         });
 
@@ -1269,8 +1385,8 @@
 
         logEvent("speech-request", {
           cue: firstInterval.cue,
-          intervalIndex: 0,
-          plannedOffsetMs: 0,
+          intervalIndex: firstInterval.index,
+          plannedOffsetMs: firstInterval.startMs,
           unlockCue: true
         });
         window.speechSynthesis.speak(utterance);
@@ -1299,6 +1415,7 @@
         config: {
           debug: isDebug,
           unitMs,
+          prepMs,
           workMs,
           shortRestMs,
           groupRestMs,
@@ -1311,6 +1428,8 @@
           audioState: audioContext ? audioContext.state : "not-created",
           sessionAudioT0,
           sessionPerfT0,
+          trainingDelayMs,
+          runtimeTotalDurationMs: runtimeTotalDurationMs(),
           wakeLockActive: Boolean(wakeLock),
           queuedSpeech: window.speechSynthesis ? window.speechSynthesis.pending : false,
           speaking: window.speechSynthesis ? window.speechSynthesis.speaking : false

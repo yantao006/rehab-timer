@@ -19,7 +19,7 @@ This is inferred directly from the launch brief because the worker session is ex
 ## Product Purpose
 
 The product runs one fixed rehabilitation session with a single Start action, then makes voice cues and clock-zero beeps sufficient to complete the session without looking at the screen.
-Success means the user can follow every work, short-rest, group-rest, and completion transition by sound alone.
+Success means the user can follow the 30-second preparation window and every work, short-rest, group-rest, and completion transition by sound alone.
 
 ## Positioning
 
@@ -33,7 +33,8 @@ The user may glance at a large countdown, but audio remains the complete operati
 
 ## Capabilities and Constraints
 
-A session has two groups of six repetitions.
+A session begins with 「准备，30秒」, a clock-zero beep, and a 30-second preparation window before the first work cue.
+It then has two groups of six repetitions.
 Each repetition has 15 seconds of work followed by 5 seconds of rest, except that group 1 repetition 6 goes directly from work to a 60-second group rest and group 2 repetition 6 ends the session immediately after work.
 Chinese Web Speech Synthesis speaks every cue.
 A Web Audio oscillator beep marks interval zero after its cue.

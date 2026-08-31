@@ -4,7 +4,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - The application is the self-contained `index.html`; it has no build step or network dependencies.
 - Run browser verification through `file://` with ego-browser only.
-- Use `?debugMs=100` for a roughly 29-second full-session sequence check; production remains the default when the query is absent.
+- Use `?debugMs=100` for a roughly 32-second full-session sequence check, plus the first-work cue handoff after prep; production remains the default when the query is absent.
 - Product constraints and visual-system decisions are authoritative in `PRODUCT.md` and `DESIGN.md`.
 
 ## Maintaining this file

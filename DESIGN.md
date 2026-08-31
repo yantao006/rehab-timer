@@ -98,6 +98,7 @@ Phase, group, repetition, and remaining time must be understandable in one glanc
 The page is a centered full-height lane between two rope markers.
 Idle mode places the plain-language promise beside one oversized Start block on wide screens and stacks them on phones.
 Running mode splits the scoreboard into a dark phase bay and a dominant clock field, then linearizes those zones below 700px.
+The same scoreboard shows the preparation countdown before any repetition becomes active.
 The outer width is capped at 920px with responsive gutters and safe-area padding.
 
 ## Elevation & Depth
