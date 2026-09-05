@@ -128,10 +128,17 @@ The current interval owns the largest type, while the next transition remains se
 
 Two labeled rows of six split-time cells map the prescribed two-group session exactly.
 Completed cells turn pool teal, the active work cell turns orange and grows vertically, and pending cells remain foam white.
+A repetition becomes complete as soon as its work interval ends, including during the following short rest and during group rest.
+
+### Skip Prep Button
+
+During the 30-second preparation window only, a teal pill labeled 「跳过准备」 sits beside Reset.
+It is hidden once the first work cue begins.
+It uses pool teal, never orange or danger red.
 
 ### Reset Button
 
-The only running control is a white pill labeled 「停止并重置」 in danger red.
+The persistent running control is a white pill labeled 「停止并重置」 in danger red.
 Its wording combines interruption and recovery so there is no ambiguous paused state.
 
 ## Do's and Don'ts
