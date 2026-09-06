@@ -8,60 +8,91 @@ web
 
 ## Stack
 
-Static, self-contained HTML, CSS, and JavaScript in `index.html`.
-This was explicitly specified in the launch brief.
+应用仍是自包含的 `index.html`，内含 HTML、CSS 和 JavaScript。
+没有构建步骤、框架、运行时网络依赖、账号、分析统计或后端。
+使用已有 GitHub 仓库和 Cloudflare Pages 项目，不创建新服务。
 
 ## Users
 
-The primary user is completing a rehabilitation exercise session and cannot reliably look at the screen while training.
-This is inferred directly from the launch brief because the worker session is explicitly unattended.
+使用者进行固定康复训练，动作期间不便持续看屏幕。
+项内以中文语音和提示音引导，项间留出由使用者决定的姿势与器材调整时间。
+不添加医疗指导、疗效承诺或新的训练剂量。
 
 ## Product Purpose
 
-The product runs one fixed rehabilitation session with a single Start action, then makes voice cues and clock-zero beeps sufficient to complete the session without looking at the screen.
-Success means the user can follow the 30-second preparation window and every work, short-rest, group-rest, and completion transition by sound alone.
+顺序完成以下五项训练后，自动记录一次完整训练，并展示本浏览器的训练日历。
+部分训练、结束或重新开始均不打卡。
+冰敷不在流程中，也不是完成条件。
 
-## Positioning
+## 固定训练方案
 
-Unlike a generic interval timer, this timer encodes one prescribed two-group rehabilitation sequence and makes the spoken-cue-then-beep boundary the authoritative start of every interval.
+| 项 | 完整动作 | 器材 | 时长与次数 |
+| --- | --- | --- | --- |
+| 1 | 俯卧左大腿屈膝后伸抗阻静力训练 | 1 kg | 训练 15 秒，重复间休息 5 秒，6 次 × 2 组 |
+| 2 | 左侧直抬腿 | 1 kg | 同上 |
+| 3 | 左髋内收抗阻静力训练 | 弹力带 15 磅 | 同上 |
+| 4 | 左踝内翻训练 | 弹力带 15 磅 | 同上 |
+| 5 | 左小腿踮脚静力训练 → 左小腿拉伸 | 不另加器材要求 | 踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮 |
+
+前四项每项第 1 组第 6 次后直接休息 60 秒，不加 5 秒短休。
+第 2 组第 6 次后直接完成该项，不加短休或组休。
+「跳过休息」仅在组间 60 秒休息期间出现，进入当前项第 2 组第 1 次。
+第五项是八个连续的 30 秒动作段，自动交替，轮间没有休息或手动等待。
+固定计时总量为 23 分 50 秒，包括首次准备，不包括语音启动交接、暂停和项间人工等待。
+
+## Flow and timing
+
+首次开始保留「准备，30秒」及提示音后的 30 秒准备窗口，可「跳过准备」。
+首次准备结束后播报第一项完整动作、器材和组次，再以提示音开始第一次训练。
+完成第 1-4 项后选中下一项，停在未运行的就位界面，必须点击「准备好了，开始下一项」。
+没有固定超时，也不为后续每项新增 30 秒准备或固定休息。
+五个编号进度点仅展示已完成、当前和待进行状态，不可点击跳项。
+
+「暂停」保留当前段的剩余毫秒，继续时重新提示后从提示音开始剩余时间，不重置整段。
+「结束 / 重新开始」先暂停并要求确认，仅清除当前进度，保留完成历史。
+项内后续语音提前播放，提示音标记段的零点；语音过长会在下一提示音前取消并警告，不插入额外休息。
+提示音不可用时明确使用视觉零点；语音缺失、报错、无正常开始事件或超时均明确警告，不永久卡住计时。
+不以浏览器返回的 speech end 事件作为人耳已听见语音的证据。
+
+计时使用 Web Audio 的单调时钟；不支持时使用 `performance.now()`。
+每段截止时间基于绝对时间边界，不使用回调次数累计时长，也不使用 RAF。
+正常短延迟不会累积漂移；明显延迟会停在最近观察的进度，不跨过未执行动作。
+离开前台或页面导航会安全暂停并取消未完成语音与已排程提示音。
 
 ## Operating Context
 
-The page is opened locally with no account or network connection.
-The phone remains unlocked, the page stays in the foreground, and Screen Wake Lock is requested when available.
-The user may glance at a large countdown, but audio remains the complete operating channel.
+正式入口为 <https://rehab-timer.pages.dev/>，无网络素材依赖，也可在支持的浏览器通过 `file://` 打开。
+手机须保持解锁且页面在前台；可用时请求 Screen Wake Lock。
+不保证锁屏或后台持续计时、播音。
+Wake Lock 不可用时提示手动延长锁屏时间。
+系统中文语音、媒体音量及实际扬声器输出取决于设备。
 
-## Capabilities and Constraints
+## Persistence and calendar
 
-A session begins with 「准备，30秒」, a clock-zero beep, and a 30-second preparation window before the first work cue.
-The preparation window can be skipped with one tap; the first work cue still plays after the skip.
-It then has two groups of six repetitions.
-Each repetition has 15 seconds of work followed by 5 seconds of rest, except that group 1 repetition 6 goes directly from work to a 60-second group rest and group 2 repetition 6 ends the session immediately after work.
-Chinese Web Speech Synthesis speaks every cue.
-A Web Audio oscillator beep marks interval zero after its cue.
-All interval boundaries are calculated from the first beep rather than chained timers.
-The page has no framework, build system, accounts, network requests, analytics, or deployment.
+完成第五项第 4 轮最后一次拉伸时生成完成记录，日期取全部完成时设备的本地日历日期。
+跨午夜按完成日记录，不按开始日，也不使用 UTC 字符串切片。
+周统计按当地周一至周日统计完整会话次数，对照原有每周 3-4 次频率，不设置每日或连续打卡目标。
+同日不同会话可计多次，但月历该日期只标记一次。
+月历可前后翻月，今天的描边与完成日期的实心色分别呈现。
 
-## Brand Commitments
-
-The voice is short, direct, and supportive without adding unrequested coaching language.
-The locked Chinese cue copy in the launch brief must remain exact.
-
-## Evidence on Hand
-
-The launch brief is the only source of product truth.
-There are no customer claims, brand assets, research results, or performance claims to fabricate.
-
-## Product Principles
-
-Audio is the primary interface, and the screen is a resilient secondary channel.
-One tap must be enough to unlock and start the experience.
-Clock boundaries must be deterministic and auditable.
-The fixed prescription must not acquire extra rests or extra cues.
-The local page must remain understandable and usable without setup.
+完成历史按会话 ID 使用独立原子存储键，重复回调、重试和恢复不重复追加记录。
+先保存终态进度，再写历史，最后移除当前进度，以便中断后幂等重试。
+未完成进度独立保存，刷新或重开仅恢复为暂停或就位，必须明确继续，不计算离线墙钟时间。
+存储失败、格式损坏或版本不兼容会显示提示，不声称保存成功，不擅自删除历史或覆盖损坏记录。
+数据仅在当前浏览器、当前设备、当前来源中保存，不跨设备同步，清除网站数据可能丢失。
+不同的 `file://` 路径、预览地址和正式域名不能当作同一个存储来源。
+没有导入导出、备份、登录或云同步功能。
 
 ## Accessibility & Inclusion
 
-Controls must remain keyboard operable and visibly focused.
-Status changes must be exposed as text without making screen-reader announcements compete with the spoken training cues.
-Motion must respect reduced-motion preferences.
+保持水蓝色泳道计分板视觉，完整中文动作及器材不截断。
+窄屏五个编号点同时可见，完整无障碍标签不被短进度文案取代。
+控件可键盘操作，有可见焦点和舒适触控尺寸，页面不横向溢出。
+仅告警使用状态播报；秒数和常规训练状态不抢占屏幕阅读器，与中文训练语音竞争。
+遵守 reduced-motion 偏好。
+
+## Validation and release
+
+开发验证方法、数据隔离参数、测试命令与现有 Pages 直接上传机制见 `README.md`。
+测试使用 `?debugMs=100` 或保留实时语音的 `?test=1`，均使用独立测试存储，不能产生正式打卡。
+不发布原始临床记录、个人标识或真实打卡数据。
