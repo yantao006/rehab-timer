@@ -8,1739 +8,769 @@
   <title>康复训练计时器</title>
   <style>
     :root {
-      --pool: #087e8b;
-      --pool-deep: #07324a;
-      --pool-dark: #041f32;
-      --water: #bde8e5;
-      --foam: #f7fbf9;
-      --tile: #eaf4f3;
-      --signal: #f36a32;
-      --signal-dark: #8c2d10;
-      --ink: #08283c;
-      --muted: #3e5d68;
-      --line: #9bcac9;
-      --danger: #a32d20;
-      --shadow: 0 16px 38px rgba(4, 31, 50, 0.16), 0 4px 10px rgba(4, 31, 50, 0.1);
+      --pool: #087e8b; --pool-deep: #07324a; --pool-dark: #041f32;
+      --water: #bde8e5; --foam: #f7fbf9; --tile: #eaf4f3;
+      --signal: #f36a32; --signal-dark: #8c2d10;
+      --ink: #08283c; --muted: #3e5d68; --line: #9bcac9; --danger: #a32d20;
+      --shadow: 0 16px 38px rgba(4,31,50,.16), 0 4px 10px rgba(4,31,50,.1);
       --radius: 26px;
     }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      min-height: 100%;
-      background: var(--tile);
-    }
-
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { min-height: 100%; background: var(--tile); }
     body {
-      margin: 0;
-      min-width: 300px;
-      min-height: 100dvh;
-      overflow-x: hidden;
-      background: var(--tile);
-      color: var(--ink);
+      margin: 0; min-height: 100dvh; background: var(--tile); color: var(--ink);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-
-    body::before,
-    body::after {
-      position: fixed;
-      z-index: 0;
-      top: 0;
-      bottom: 0;
-      width: 18px;
-      content: "";
+    body::before, body::after {
+      position: fixed; z-index: 0; top: 0; bottom: 0; width: 18px; content: "";
       background-color: var(--foam);
       background-image: radial-gradient(circle, var(--signal) 0 5px, transparent 5.5px);
-      background-position: center 3px;
-      background-size: 18px 36px;
-      border-inline: 1px solid rgba(7, 50, 74, 0.14);
-      pointer-events: none;
+      background-position: center 3px; background-size: 18px 36px;
+      border-inline: 1px solid rgba(7,50,74,.14); pointer-events: none;
     }
-
-    body::before {
-      left: 0;
-    }
-
-    body::after {
-      right: 0;
-    }
-
-    button {
-      font: inherit;
-    }
-
-    button:focus-visible {
-      outline: 4px solid var(--pool-dark);
-      outline-offset: 4px;
-    }
-
+    body::before { left: 0; } body::after { right: 0; }
+    button { font: inherit; touch-action: manipulation; cursor: pointer; }
+    button:focus-visible, summary:focus-visible { outline: 3px solid var(--pool); outline-offset: 4px; }
+    button:disabled { opacity: .55; cursor: wait; }
+    h1, h2, h3, p { margin: 0; }
     .app-shell {
-      position: relative;
-      z-index: 1;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      width: min(100% - 64px, 920px);
-      min-height: 100dvh;
-      margin: 0 auto;
+      position: relative; z-index: 1; width: min(100% - 64px, 920px); margin: 0 auto;
       padding: max(24px, env(safe-area-inset-top)) 0 max(22px, env(safe-area-inset-bottom));
     }
-
-    .site-header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 24px;
-      padding: 0 4px 22px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .site-header h1 {
-      max-width: 12ch;
-      margin: 0;
-      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
-      font-size: clamp(2rem, 5vw, 3.45rem);
-      font-weight: 700;
-      line-height: 0.98;
-      letter-spacing: -0.04em;
-      text-wrap: balance;
-    }
-
-    .session-formula {
-      flex: 0 0 auto;
-      margin: 0;
-      color: var(--muted);
-      font-size: clamp(0.88rem, 2vw, 1rem);
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-align: right;
-    }
-
-    main {
-      display: grid;
-      align-items: center;
-      padding: clamp(26px, 6vh, 64px) 0;
-    }
-
-    .idle-panel,
-    .running-panel {
-      min-width: 0;
-    }
-
-    .idle-panel {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
-      align-items: stretch;
-      gap: clamp(24px, 5vw, 54px);
-    }
-
-    .idle-copy {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      min-height: 300px;
-    }
-
-    .idle-copy h2 {
-      max-width: 10ch;
-      margin: 0 0 24px;
-      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
-      font-size: clamp(2.55rem, 7vw, 5.4rem);
-      font-weight: 700;
-      line-height: 0.98;
-      letter-spacing: -0.04em;
-      text-wrap: balance;
-    }
-
-    .idle-copy p {
-      max-width: 31rem;
-      margin: 0;
-      color: var(--muted);
-      font-size: clamp(1rem, 2vw, 1.16rem);
-      line-height: 1.7;
-    }
-
-    .start-button {
-      position: relative;
-      display: grid;
-      min-height: 300px;
-      overflow: hidden;
-      place-items: center;
-      padding: 34px;
-      border: 0;
-      border-radius: var(--radius);
-      background: var(--signal);
-      box-shadow: var(--shadow);
-      color: var(--pool-dark);
-      cursor: pointer;
-      isolation: isolate;
-      touch-action: manipulation;
-      transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms ease;
-    }
-
-    .start-button::before {
-      position: absolute;
-      z-index: -1;
-      right: -52px;
-      bottom: -66px;
-      width: 210px;
-      height: 210px;
-      border: 28px solid rgba(247, 251, 249, 0.24);
-      border-radius: 50%;
-      content: "";
-    }
-
-    .start-button:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 21px 44px rgba(4, 31, 50, 0.2), 0 6px 12px rgba(4, 31, 50, 0.12);
-    }
-
-    .start-button:active {
-      transform: translateY(1px);
-      box-shadow: 0 10px 26px rgba(4, 31, 50, 0.16), 0 3px 7px rgba(4, 31, 50, 0.1);
-    }
-
-    .start-button:disabled {
-      cursor: wait;
-      filter: saturate(0.55);
-      transform: none;
-    }
-
-    .start-inner {
-      display: grid;
-      justify-items: center;
-      gap: 18px;
-    }
-
-    .start-icon {
-      width: 78px;
-      height: 52px;
-      stroke: currentColor;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 5;
-    }
-
-    .start-label {
-      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
-      font-size: clamp(2.5rem, 6vw, 4.5rem);
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: -0.04em;
-    }
-
-    .start-note {
-      max-width: 18ch;
-      color: #213b43;
-      font-size: 0.98rem;
-      font-weight: 700;
-      line-height: 1.45;
-      text-align: center;
-    }
-
-    .running-panel {
-      display: none;
-      gap: 22px;
-    }
-
-    body[data-mode="running"] .idle-panel {
-      display: none;
-    }
-
-    body[data-mode="running"] .running-panel {
-      display: grid;
-      animation: scoreboard-in 580ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    }
-
-    .scoreboard {
-      position: relative;
-      display: grid;
-      grid-template-columns: minmax(180px, 0.72fr) minmax(250px, 1fr);
-      min-height: min(48vh, 430px);
-      overflow: hidden;
-      border-radius: var(--radius);
-      background: var(--pool-deep);
-      box-shadow: var(--shadow);
-      color: var(--foam);
-    }
-
-    .scoreboard::after {
-      position: absolute;
-      right: -48px;
-      bottom: -48px;
-      width: 172px;
-      height: 172px;
-      border: 28px solid rgba(189, 232, 229, 0.12);
-      border-radius: 50%;
-      content: "";
-      pointer-events: none;
-    }
-
-    .interval-state {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 28px;
-      padding: clamp(26px, 5vw, 48px);
-      background: var(--pool-dark);
-    }
-
-    .phase-name {
-      margin: 0;
-      color: var(--water);
-      font-family: "Kaiti SC", "STKaiti", "KaiTi", serif;
-      font-size: clamp(2rem, 6vw, 4.8rem);
-      font-weight: 700;
-      line-height: 1;
-      letter-spacing: -0.04em;
-    }
-
-    .position-copy {
-      margin: 0;
-      color: #d9eeee;
-      font-size: clamp(1rem, 2.4vw, 1.32rem);
-      font-weight: 700;
-      line-height: 1.45;
-    }
-
-    .clock-field {
-      display: grid;
-      align-content: center;
-      justify-items: center;
-      min-width: 0;
-      padding: clamp(28px, 6vw, 58px);
-      text-align: center;
-    }
-
-    .countdown {
-      margin: 0;
-      font-family: "Avenir Next Condensed", "DIN Condensed", "Arial Narrow", sans-serif;
-      font-size: clamp(5rem, 21vw, 6rem);
-      font-variant-numeric: tabular-nums;
-      font-weight: 800;
-      line-height: 0.82;
-      letter-spacing: -0.04em;
-    }
-
-    .countdown-unit {
-      margin: 22px 0 0;
-      color: var(--water);
-      font-size: 0.92rem;
-      font-weight: 800;
-      letter-spacing: 0.16em;
-    }
-
-    .next-cue {
-      min-height: 1.5em;
-      margin: 18px 0 0;
-      color: #d9eeee;
-      font-size: 0.96rem;
-      line-height: 1.5;
-    }
-
-    .lane-progress {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 12px 16px;
-      align-items: center;
-      padding: 4px;
-    }
-
-    .lane-label {
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    .lane-cells {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(16px, 1fr));
-      gap: 7px;
-    }
-
-    .lane-cell {
-      height: 12px;
-      border: 1px solid #659da0;
-      border-radius: 999px;
-      background: var(--foam);
-      transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
-    }
-
-    .lane-cell[data-state="complete"] {
-      border-color: var(--pool);
-      background: var(--pool);
-    }
-
-    .lane-cell[data-state="active"] {
-      border-color: var(--signal-dark);
-      background: var(--signal);
-      transform: scaleY(1.65);
-    }
-
-    .running-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-    }
-
-    .running-controls {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-
-    .audio-status {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.92rem;
-      font-weight: 700;
-    }
-
-    .audio-status svg {
-      width: 23px;
-      height: 23px;
-      flex: 0 0 auto;
-      fill: none;
-      stroke: var(--pool);
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 2;
-    }
-
-    .skip-button,
-    .reset-button {
-      min-height: 52px;
-      padding: 0 24px;
-      border-radius: 999px;
-      font-weight: 800;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-
-    .skip-button {
-      border: 1px solid var(--pool);
-      background: var(--water);
-      color: var(--pool-dark);
-      transition: background-color 160ms ease, border-color 160ms ease;
-    }
-
-    .skip-button:hover {
-      border-color: var(--pool-deep);
-      background: #d7f3f1;
-    }
-
-    .skip-button[hidden] {
-      display: none;
-    }
-
-    .reset-button {
-      border: 1px solid #6e9da0;
-      background: var(--foam);
-      color: var(--danger);
-      transition: background-color 160ms ease, border-color 160ms ease;
-    }
-
-    .reset-button:hover {
-      border-color: var(--danger);
-      background: #fff3f0;
-    }
-
-    .page-footer {
-      display: grid;
-      gap: 12px;
-      padding: 19px 4px 0;
-      border-top: 1px solid var(--line);
-    }
-
-    .foreground-reminder,
-    .compatibility-message {
-      margin: 0;
-      line-height: 1.55;
-    }
-
-    .foreground-reminder {
-      color: var(--ink);
-      font-size: 0.96rem;
-      font-weight: 800;
-    }
-
-    .foreground-reminder strong {
-      color: var(--signal-dark);
-    }
-
-    .compatibility-message {
-      display: none;
-      max-width: 70ch;
-      color: var(--danger);
-      font-size: 0.9rem;
-      font-weight: 700;
-    }
-
-    .compatibility-message[data-visible="true"] {
-      display: block;
-    }
-
-    .debug-badge {
-      display: none;
-      width: fit-content;
-      padding: 5px 9px;
-      border: 1px solid var(--pool);
-      border-radius: 999px;
-      color: var(--pool-deep);
-      font-size: 0.74rem;
-      font-weight: 800;
-    }
-
-    .debug-badge[data-visible="true"] {
-      display: block;
-    }
-
+    .site-header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 0 4px 22px; border-bottom: 1px solid var(--line); }
+    .site-header h1 { max-width: 12ch; font: 700 clamp(2rem,5vw,3.45rem)/.98 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
+    .session-formula { color: var(--muted); font-weight: 700; font-size: .95rem; line-height: 1.6; text-align: right; }
+    main { padding: 28px 0 36px; }
+    .stage-progress { list-style: none; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; margin: 0 0 26px; padding: 0; }
+    .stage-point { min-width: 0; display: grid; justify-items: center; gap: 7px; text-align: center; color: var(--muted); }
+    .stage-number { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #659da0; border-radius: 50%; background: var(--foam); font-weight: 800; font-size: 1.2rem; }
+    .stage-point[data-state="current"] .stage-number { background: var(--signal); border-color: var(--signal-dark); color: var(--pool-dark); }
+    .stage-point[data-state="complete"] .stage-number { background: var(--pool); border-color: var(--pool); color: white; }
+    .stage-label { font-size: .88rem; font-weight: 700; line-height: 1.45; }
+    .stage-status { font-size: .75rem; }
+    .idle-panel { display: grid; grid-template-columns: minmax(0,1fr) minmax(260px,.78fr); align-items: stretch; gap: 36px; }
+    .idle-copy { display: flex; flex-direction: column; justify-content: center; gap: 20px; }
+    .idle-copy h2 { max-width: 10ch; font: 700 clamp(2.55rem,7vw,4.6rem)/1.05 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
+    .idle-copy p { max-width: 31rem; color: var(--muted); font-size: 1.05rem; line-height: 1.7; }
+    .start-button { position: relative; display: grid; min-height: 280px; overflow: hidden; place-items: center; padding: 30px; border: 0; border-radius: var(--radius); background: var(--signal); box-shadow: var(--shadow); color: var(--pool-dark); isolation: isolate; transition: transform 220ms cubic-bezier(.16,1,.3,1); }
+    .start-button::before { position: absolute; z-index: -1; right: -52px; bottom: -66px; width: 210px; height: 210px; border: 28px solid rgba(247,251,249,.24); border-radius: 50%; content: ""; }
+    .start-button:hover { transform: translateY(-3px); } .start-button:active { transform: translateY(1px); }
+    .start-inner { display: grid; justify-items: center; gap: 18px; }
+    .start-icon { width: 78px; height: 52px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 5; }
+    .start-label { font: 700 clamp(2.5rem,6vw,4rem)/1 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; }
+    .start-note { color: #213b43; font-size: .95rem; font-weight: 700; line-height: 1.5; }
+    .routine-details { margin-top: 24px; color: var(--muted); line-height: 1.8; }
+    summary { cursor: pointer; font-weight: 700; padding-block: 12px; }
+    .routine-details ol { padding-left: 24px; margin: 8px 0; }
+    .routine-details li { margin-bottom: 12px; }
+    .running-panel { display: grid; gap: 20px; }
+    .exercise-heading { font-size: 1.4rem; line-height: 1.5; overflow-wrap: anywhere; }
+    .exercise-meta { margin-top: 6px; color: var(--muted); line-height: 1.6; }
+    .scoreboard { position: relative; display: grid; grid-template-columns: minmax(180px,.8fr) minmax(240px,1fr); min-height: 300px; overflow: hidden; border-radius: var(--radius); background: var(--pool-deep); box-shadow: var(--shadow); color: var(--foam); }
+    .scoreboard::after { position: absolute; right: -48px; bottom: -48px; width: 172px; height: 172px; border: 28px solid rgba(189,232,229,.12); border-radius: 50%; content: ""; pointer-events: none; }
+    .running-panel.reveal .scoreboard { animation: scoreboard-in 500ms cubic-bezier(.16,1,.3,1) both; }
+    .interval-state { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; padding: 32px; background: var(--pool-dark); }
+    .phase-name { color: var(--water); font: 700 2.7rem/1.15 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; }
+    .action-name { font-size: 1.1rem; font-weight: 700; line-height: 1.6; margin-top: 14px; }
+    .position-copy { color: #d9eeee; font-size: 1.1rem; font-weight: 700; line-height: 1.5; }
+    .clock-field { display: grid; align-content: center; justify-items: center; min-width: 0; padding: 36px 24px; text-align: center; }
+    .countdown { font: 800 6rem/.9 "Avenir Next Condensed", "DIN Condensed", "Arial Narrow", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+    .countdown-unit { margin-top: 18px; color: var(--water); font-size: .92rem; font-weight: 800; }
+    .next-cue { margin-top: 16px; color: #d9eeee; font-size: .95rem; line-height: 1.6; }
+    .clock-field .control { position: relative; z-index: 1; margin-top: 20px; }
+    .clock-field .control:focus-visible { outline-color: var(--foam); }
+    .scoreboard[data-state="ready"] .countdown { font-size: 3rem; }
+    .lane-progress { display: grid; grid-template-columns: auto 1fr; gap: 12px 16px; align-items: center; padding: 4px; }
+    .lane-label { color: var(--muted); font-size: .82rem; font-weight: 800; white-space: nowrap; }
+    .lane-cells { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 7px; }
+    .lane-cell { height: 12px; border: 1px solid #659da0; border-radius: 999px; background: var(--foam); }
+    .lane-cell[data-state="complete"] { border-color: var(--pool); background: var(--pool); }
+    .lane-cell[data-state="active"] { border-color: var(--signal-dark); background: var(--signal); transform: scaleY(1.5); }
+    .running-actions, .running-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+    .running-actions { justify-content: space-between; }
+    .audio-status { color: var(--muted); font-size: .9rem; line-height: 1.6; }
+    .control { min-height: 52px; padding: 12px 22px; border: 1px solid var(--pool); border-radius: 999px; font-weight: 700; line-height: 1.5; background: var(--water); color: var(--pool-dark); }
+    .control:hover { background: #d7f3f1; border-color: var(--pool-deep); }
+    .control:active { transform: translateY(1px); }
+    .control.primary { background: var(--signal); border-color: var(--signal-dark); }
+    .control.primary:hover { background: #fa8454; }
+    .control.danger { background: var(--foam); color: var(--danger); border-color: #6e9da0; }
+    .control.danger:hover { background: #fff3f0; border-color: var(--danger); }
+    .ready-note, .notice { line-height: 1.65; }
+    .notice { padding: 12px 0; color: var(--danger); font-weight: 700; }
+    .reset-confirm { border-top: 1px solid var(--line); padding-top: 16px; }
+    .reset-confirm p { margin-bottom: 12px; line-height: 1.6; }
+    .calendar-section { border-top: 1px solid var(--line); padding-top: 26px; margin-bottom: 30px; }
+    .calendar-top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px 20px; }
+    .calendar-top h2 { font-size: 1.35rem; }
+    .calendar-top p { color: var(--muted); font-size: .95rem; line-height: 1.6; }
+    .calendar-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 18px 0 12px; }
+    .calendar-nav .control { min-height: 44px; padding: 8px 14px; font-size: .9rem; }
+    .month-title { font-size: 1.15rem; text-align: center; }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; }
+    .weekday { color: var(--muted); font-size: .85rem; padding: 8px 0; text-align: center; }
+    .calendar-day { min-height: 58px; padding: 7px 2px; display: grid; justify-items: center; align-content: center; gap: 3px; border-radius: 8px; border: 1px solid transparent; font-variant-numeric: tabular-nums; }
+    .calendar-day[data-complete="true"] { background: var(--pool); color: white; }
+    .calendar-day[aria-current="date"] { border: 2px solid var(--pool-dark); }
+    .calendar-day small { font-size: .7rem; line-height: 1.3; }
+    .calendar-note { color: var(--muted); font-size: .88rem; line-height: 1.7; margin-top: 14px; }
+    .page-footer { display: grid; gap: 10px; padding: 18px 4px 0; border-top: 1px solid var(--line); }
+    .foreground-reminder { font-size: .95rem; font-weight: 700; line-height: 1.6; }
+    .foreground-reminder strong { color: var(--signal-dark); }
+    .local-note { font-size: .86rem; line-height: 1.65; color: var(--muted); }
+    .debug-badge { margin-bottom: 16px; padding: 10px 14px; border: 1px solid var(--pool); color: var(--pool-deep); font-weight: 700; line-height: 1.6; }
     @keyframes scoreboard-in {
-      from {
-        clip-path: inset(0 100% 0 0 round var(--radius));
-        filter: blur(7px);
-        transform: translateX(-20px);
-      }
-      to {
-        clip-path: inset(0 0 0 0 round var(--radius));
-        filter: blur(0);
-        transform: translateX(0);
-      }
+      from { clip-path: inset(0 100% 0 0 round var(--radius)); filter: blur(7px); transform: translateX(-20px); }
+      to { clip-path: inset(0 0 0 0 round var(--radius)); filter: blur(0); transform: translateX(0); }
     }
-
     @media (max-width: 700px) {
-      body::before,
-      body::after {
-        width: 10px;
-        background-size: 10px 24px;
-        background-image: radial-gradient(circle, var(--signal) 0 3px, transparent 3.5px);
-      }
-
-      .app-shell {
-        width: min(100% - 40px, 560px);
-        padding-top: max(18px, env(safe-area-inset-top));
-      }
-
-      .site-header {
-        align-items: flex-end;
-        gap: 12px;
-        padding-bottom: 16px;
-      }
-
-      .idle-panel {
-        grid-template-columns: 1fr;
-        gap: 24px;
-      }
-
-      .idle-copy {
-        min-height: 0;
-      }
-
-      .idle-copy h2 {
-        margin-bottom: 14px;
-      }
-
-      .start-button {
-        min-height: 238px;
-      }
-
-      .scoreboard {
-        grid-template-columns: 1fr;
-        min-height: 440px;
-      }
-
-      .interval-state {
-        min-height: 144px;
-        flex-direction: row;
-        align-items: flex-end;
-        padding: 24px;
-      }
-
-      .clock-field {
-        min-height: 270px;
-        padding: 30px 24px 36px;
-      }
-
-      .phase-name {
-        font-size: clamp(2.4rem, 12vw, 4rem);
-      }
-
-      .position-copy {
-        text-align: right;
-      }
-
-      .running-actions {
-        align-items: flex-start;
-      }
-
-      .audio-status {
-        max-width: 19ch;
-      }
+      body::before, body::after { width: 10px; background-size: 10px 24px; background-image: radial-gradient(circle,var(--signal) 0 3px,transparent 3.5px); }
+      .app-shell { width: calc(100% - 40px); padding-top: max(18px,env(safe-area-inset-top)); }
+      .site-header { gap: 12px; align-items: center; padding-bottom: 16px; }
+      .site-header h1 { font-size: 1.85rem; }
+      .session-formula { font-size: .78rem; flex-shrink: 0; }
+      .stage-progress { gap: 5px; margin-bottom: 22px; }
+      .stage-number { width: 38px; height: 38px; }
+      .stage-label { font-size: .75rem; } .stage-status { font-size: .7rem; }
+      .idle-panel { grid-template-columns: 1fr; gap: 24px; }
+      .idle-copy h2 { font-size: 2.6rem; }
+      .start-button { min-height: 210px; }
+      .scoreboard { grid-template-columns: 1fr; min-height: 0; }
+      .interval-state { padding: 22px; gap: 18px; }
+      .phase-name { font-size: 2.4rem; }
+      .clock-field { padding: 26px 22px; }
+      .countdown { font-size: 5.5rem; }
+      .exercise-heading { font-size: 1.15rem; }
+      .running-controls { width: 100%; }
+      .control { padding-inline: 18px; }
+      .calendar-day { min-height: 54px; }
     }
-
-    @media (max-width: 420px) {
-      .site-header h1 {
-        font-size: 1.85rem;
-      }
-
-      .session-formula {
-        font-size: 0.77rem;
-      }
-
-      main {
-        padding: 24px 0;
-      }
-
-      .idle-copy h2 {
-        font-size: 2.6rem;
-      }
-
-      .start-label {
-        font-size: 3rem;
-      }
-
-      .lane-progress {
-        gap: 10px;
-      }
-
-      .lane-cells {
-        gap: 5px;
-      }
-
-      .skip-button,
-      .reset-button {
-        padding-inline: 18px;
-      }
-    }
-
-    @media (max-height: 650px) and (orientation: landscape) {
-      .app-shell {
-        min-height: 100vh;
-        padding-block: 12px;
-      }
-
-      .site-header {
-        padding-bottom: 10px;
-      }
-
-      main {
-        padding-block: 14px;
-      }
-
-      .idle-panel {
-        grid-template-columns: 1fr 0.75fr;
-      }
-
-      .idle-copy,
-      .start-button {
-        min-height: 210px;
-      }
-
-      .scoreboard {
-        grid-template-columns: 0.7fr 1fr;
-        min-height: 260px;
-      }
-
-      .interval-state {
-        min-height: 0;
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .clock-field {
-        min-height: 0;
-        padding-block: 28px;
-      }
-
-      .page-footer {
-        padding-top: 10px;
-      }
-    }
-
     @media (prefers-reduced-motion: reduce) {
-      *,
-      *::before,
-      *::after {
-        scroll-behavior: auto !important;
-        animation-duration: 0.001ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.001ms !important;
-      }
+      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
     }
   </style>
 </head>
-<body data-mode="idle">
-  <!--
-    THESIS: A pool-deck pace board turns one prescribed rehab sequence into an unmistakable audible lane, refusing the generic circular timer.
-    OWN-WORLD: Chlorine tile, deep lane blue, safety orange, rope markers, split-time bars, and broad scoreboard digits form the complete control language.
-    STORY: One tap arms voice and sound, every beep starts the named interval, and the fixed lane ends without surprise.
-    FIRST VIEWPORT: A plain-language promise faces one oversized orange Start block; while running, group and rep occupy the dark lane beside the dominant countdown.
-    FORM: Aquatic therapy pace board, grounded direction 6, seed bce5306d.
-    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
-  -->
+<body>
   <div class="app-shell">
     <header class="site-header">
       <h1>康复训练计时器</h1>
-      <p class="session-formula">2 组 × 6 次<br>训练 15 秒 · 休息 5 秒</p>
+      <p class="session-formula">5 项顺序训练<br>语音引导 · 完整打卡</p>
     </header>
-
     <main>
-      <section class="idle-panel" aria-labelledby="idle-title">
-        <div class="idle-copy">
-          <h2 id="idle-title">点一次，之后只需听。</h2>
-          <p>每个阶段会先用中文播报，再以提示音作为计时零点。请先调高媒体音量。</p>
+      <p class="debug-badge" id="debugBadge" hidden></p>
+      <ol class="stage-progress" id="stageProgress" aria-label="五项训练进度，仅展示，不可跳项"></ol>
+      <section id="idlePanel" aria-labelledby="idleTitle">
+        <div class="idle-panel">
+          <div class="idle-copy">
+            <h2 id="idleTitle">每项就位，<br>之后只需听。</h2>
+            <p>开始后有 30 秒准备。每项完成后，等你准备好再继续下一项。全部五项完成，自动记录一次训练。</p>
+          </div>
+          <button class="start-button" id="startButton" type="button">
+            <span class="start-inner">
+              <svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true"><path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/></svg>
+              <span class="start-label">开始训练</span>
+              <span class="start-note">请先调高媒体音量</span>
+            </span>
+          </button>
         </div>
-
-        <button class="start-button" id="startButton" type="button">
-          <span class="start-inner">
-            <svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true">
-              <path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/>
-            </svg>
-            <span class="start-label">开始训练</span>
-            <span class="start-note">一次点击解锁语音和提示音</span>
-          </span>
-        </button>
+        <details class="routine-details"><summary>查看五项动作与用量</summary><ol id="routineList"></ol></details>
       </section>
-
-      <section class="running-panel" aria-label="训练计时状态">
+      <section class="running-panel" id="runningPanel" aria-label="当前训练" hidden>
+        <div><h2 class="exercise-heading" id="exerciseName"></h2><p class="exercise-meta" id="exerciseMeta"></p></div>
         <div class="scoreboard">
           <div class="interval-state">
-            <p class="phase-name" id="phaseName">准备</p>
-            <p class="position-copy" id="positionCopy">正在播报准备提示</p>
+            <div><p class="phase-name" id="phaseName"></p><p class="action-name" id="actionName"></p></div>
+            <p class="position-copy" id="positionCopy"></p>
           </div>
           <div class="clock-field">
-            <p class="countdown" id="countdown">30</p>
-            <p class="countdown-unit" id="countdownUnit">秒</p>
-            <p class="next-cue" id="nextCue">提示音响起后开始 30 秒准备</p>
+            <p class="countdown" id="countdown"></p><p class="countdown-unit" id="countdownUnit"></p><p class="next-cue" id="nextCue"></p>
+            <button class="control primary" id="continueButton" type="button" hidden>继续训练</button>
           </div>
         </div>
-
-        <div class="lane-progress" id="laneProgress" aria-label="训练进度"></div>
-
+        <div class="lane-progress" id="laneProgress" aria-label="当前项组次进度"></div>
+        <p class="ready-note" id="readyNote" hidden></p>
         <div class="running-actions">
-          <p class="audio-status">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 10v4h4l5 4V6L8 10H4Z"/>
-              <path d="M16 9c1 .8 1.5 1.8 1.5 3S17 14.2 16 15"/>
-              <path d="M18.5 6.5c1.8 1.5 2.7 3.3 2.7 5.5s-.9 4-2.7 5.5"/>
-            </svg>
-            <span id="audioStatusText">语音与提示音已启用</span>
-          </p>
+          <p class="audio-status" id="audioStatusText">请保持页面在前台</p>
           <div class="running-controls">
-            <button class="skip-button" id="skipPrepButton" type="button" hidden>跳过准备</button>
-            <button class="reset-button" id="resetButton" type="button">停止并重置</button>
+            <button class="control" id="pauseButton" type="button" hidden>暂停</button>
+            <button class="control" id="skipPrepButton" type="button" hidden>跳过准备</button>
+            <button class="control" id="skipRestButton" type="button" hidden>跳过休息</button>
+            <button class="control danger" id="resetButton" type="button">结束 / 重新开始</button>
+            <button class="control" id="retrySaveButton" type="button" hidden>重试保存打卡</button>
           </div>
+        </div>
+        <div class="reset-confirm" id="resetConfirm" hidden>
+          <p>结束本次训练？未完成的训练不打卡，已保存的历史不会删除。</p>
+          <div class="running-controls"><button class="control danger" id="confirmResetButton" type="button">确认结束本次</button><button class="control" id="cancelResetButton" type="button">保留进度</button></div>
         </div>
       </section>
+      <p class="notice" id="runtimeMessage" role="status" hidden></p>
+      <p class="notice" id="compatibilityMessage" role="status" hidden></p>
+      <p class="notice" id="storageMessage" role="status" hidden></p>
     </main>
-
+    <section class="calendar-section" aria-labelledby="calendarTitle">
+      <div class="calendar-top"><h2 id="calendarTitle">训练日历</h2><p id="weeklySummary"></p></div>
+      <div class="calendar-nav">
+        <button class="control" id="prevMonth" type="button" aria-label="上一个月">上月</button>
+        <h3 class="month-title" id="monthTitle" aria-live="polite"></h3>
+        <button class="control" id="nextMonth" type="button" aria-label="下一个月">下月</button>
+      </div>
+      <div class="calendar-grid" id="calendarGrid" role="list" aria-label="本月日期"></div>
+      <p class="calendar-note" id="calendarNote"></p>
+    </section>
     <footer class="page-footer">
-      <p class="foreground-reminder"><strong>训练时请勿锁屏，也不要切换 App。</strong> 页面会在浏览器允许时保持屏幕常亮。</p>
-      <p class="compatibility-message" id="compatibilityMessage" role="alert" data-visible="false"></p>
-      <span class="debug-badge" id="debugBadge" data-visible="false">调试计时</span>
+      <p class="foreground-reminder"><strong>训练时请勿锁屏，也不要切换 App。</strong>离开页面会暂停，返回后需手动继续。</p>
+      <p class="local-note">打卡和进度仅保存在当前浏览器、当前设备，不会跨设备同步；清除网站数据可能丢失。跨午夜的训练按全部完成时的本地日期记录。</p>
     </footer>
   </div>
-
-  <script>
+  <script id="rehab-core">
+    /* Dependency-free domain code. Tests execute this exact script, not a copy. */
+    globalThis.RehabCore = (() => {
+      "use strict";
+      const VERSION = 1;
+      const PROGRAM = "five-stage-v1";
+      const stages = [
+        { name: "俯卧左大腿屈膝后伸抗阻静力训练", equipment: "1 kg", short: "大腿后伸" },
+        { name: "左侧直抬腿", equipment: "1 kg", short: "直抬腿" },
+        { name: "左髋内收抗阻静力训练", equipment: "弹力带 15 磅", short: "髋内收" },
+        { name: "左踝内翻训练", equipment: "弹力带 15 磅", short: "踝内翻" },
+        { name: "左小腿踮脚静力训练 → 左小腿拉伸", equipment: "", short: "踮脚 / 拉伸" }
+      ];
+      const makePlan = () => {
+        const plan = [{ stage: 0, kind: "prep", seconds: 30 }];
+        for (let stage = 0; stage < 4; stage++) {
+          for (let group = 1; group <= 2; group++) {
+            for (let rep = 1; rep <= 6; rep++) {
+              plan.push({ stage, group, rep, kind: "work", seconds: 15 });
+              if (rep < 6) plan.push({ stage, group, rep, kind: "rest", seconds: 5 });
+            }
+            if (group === 1) plan.push({ stage, group, rep: 6, kind: "group-rest", seconds: 60 });
+          }
+        }
+        for (let round = 1; round <= 4; round++) {
+          plan.push({ stage: 4, round, kind: "work", action: "左小腿踮脚静力训练", seconds: 30 });
+          plan.push({ stage: 4, round, kind: "stretch", action: "左小腿拉伸", seconds: 30 });
+        }
+        return plan.map((item, index) => Object.freeze({ ...item, index }));
+      };
+      const plan = Object.freeze(makePlan());
+      const localDate = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+      const validDate = value => {
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const [y,m,d] = value.split("-").map(Number);
+        return localDate(new Date(y,m-1,d,12)) === value;
+      };
+      const validId = id => typeof id === "string" && /^[\w-]{8,100}$/.test(id);
+      const validRecord = r => Boolean(r && r.version === VERSION && validId(r.id) && validDate(r.date) && typeof r.finishedAt === "string" && Number.isFinite(Date.parse(r.finishedAt)));
+      const monthCells = (year, month, records, today) => {
+        const marked = new Set(records.map(r => r.date));
+        const first = new Date(year,month,1,12);
+        const cells = Array((first.getDay()+6)%7).fill(null);
+        const count = new Date(year,month+1,0,12).getDate();
+        for (let day = 1; day <= count; day++) {
+          const date = localDate(new Date(year,month,day,12));
+          cells.push({ day, date, complete: marked.has(date), today: date === localDate(today) });
+        }
+        return cells;
+      };
+      const weeklyCount = (records, today) => {
+        const start = new Date(today.getFullYear(),today.getMonth(),today.getDate(),12);
+        start.setDate(start.getDate()-(start.getDay()+6)%7);
+        const end = new Date(start); end.setDate(end.getDate()+7);
+        return records.filter(r => r.date >= localDate(start) && r.date < localDate(end)).length;
+      };
+      class Engine {
+        constructor(unitMs = 1000) { this.unitMs = unitMs; this.reset(); }
+        reset() { this.state = "idle"; this.id = null; this.index = 0; this.remaining = 30*this.unitMs; this.deadline = null; this.lastNow = null; this.resumeState = "cue"; this.completion = null; this.reason = ""; }
+        get interval() { return plan[this.index]; }
+        start(id) { if (this.state !== "idle" || !validId(id)) return false; this.id = id; this.state = "cue"; return true; }
+        arm(now) { if (this.state !== "cue") return false; this.state = "running"; this.deadline = now+this.remaining; this.lastNow = now; return true; }
+        tick(now, date = new Date()) {
+          if (this.state !== "running") return null;
+          // A throttled callback never catches up through unseen/unperformed intervals.
+          // Freeze at the last observed instant, including when the audio clock stops.
+          const boundaryGrace = Math.min(1000, 2*this.unitMs);
+          if (now < this.lastNow || now-this.lastNow > 1500 || now-this.deadline > boundaryGrace) {
+            this.pause(this.lastNow); this.reason = "计时回调延迟，已安全暂停，请确认动作后继续。"; return "late";
+          }
+          this.lastNow = now;
+          this.remaining = Math.max(0,this.deadline-now);
+          if (now < this.deadline) return null;
+          const old = this.interval;
+          if (this.index === plan.length-1) {
+            this.state = "finished";
+            this.completion = { version: VERSION, id: this.id, date: localDate(date), finishedAt: date.toISOString() };
+            return "finished";
+          }
+          this.index++;
+          this.remaining = this.interval.seconds*this.unitMs;
+          if (this.interval.stage !== old.stage) { this.state = "ready"; this.deadline = null; return "ready"; }
+          if (old.kind === "prep") { this.state = "cue"; this.deadline = null; return "cue"; }
+          this.deadline += this.remaining;
+          this.remaining = Math.max(0,this.deadline-now);
+          return "interval";
+        }
+        pause(now) {
+          if (!["running","cue"].includes(this.state)) return false;
+          this.resumeState = this.state;
+          if (this.state === "running") {
+            // Do not count a gap since the last heartbeat as performed training.
+            const safeNow = Math.min(now,this.lastNow+1500,this.deadline);
+            this.remaining = Math.max(1,this.deadline-safeNow);
+          }
+          this.state = "paused"; this.deadline = null; return true;
+        }
+        continue() {
+          if (!["paused","ready"].includes(this.state)) return false;
+          this.state = "cue"; this.reason = ""; return true;
+        }
+        skip(kind, now) {
+          if (this.state !== "running" || this.interval.kind !== kind || !["prep","group-rest"].includes(kind)) return false;
+          // Revalidate at the click's timestamp, so a stale control cannot skip work.
+          const result = this.tick(now);
+          if (result || this.state !== "running" || this.interval.kind !== kind) return false;
+          this.index++; this.remaining = this.interval.seconds*this.unitMs; this.state = "cue"; this.deadline = null; return true;
+        }
+        snapshot() {
+          if (this.state === "idle") return null;
+          return { version: VERSION, program: PROGRAM, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
+        }
+        restore(s) {
+          if (!s || s.version !== VERSION || s.program !== PROGRAM || s.unitMs !== this.unitMs || !validId(s.id) || !Number.isInteger(s.index) || !plan[s.index] || !Number.isFinite(s.remaining) || s.remaining < 0 || s.remaining > plan[s.index].seconds*this.unitMs || !["cue","running","paused","ready","finished"].includes(s.state)) return false;
+          if (s.state === "finished" && (s.index !== plan.length-1 || s.remaining !== 0 || !validRecord(s.completion) || s.completion.id !== s.id)) return false;
+          if (s.state !== "finished" && (s.remaining <= 0 || s.completion !== null)) return false;
+          if (s.state === "ready" && (s.index === 0 || plan[s.index-1].stage === plan[s.index].stage || s.remaining !== plan[s.index].seconds*this.unitMs)) return false;
+          this.id = s.id; this.index = s.index; this.remaining = s.remaining; this.completion = s.completion;
+          this.state = s.state === "finished" ? "finished" : s.state === "ready" ? "ready" : "paused";
+          this.deadline = null; this.lastNow = null; this.reason = "已恢复保存的进度，未计入离开页面的时间。";
+          return true;
+        }
+      }
+      class SpeechChannel {
+        constructor({ synth, makeUtterance, now, setTimer, clearTimer, warn, log }) {
+          Object.assign(this,{ synth, makeUtterance, now, setTimer, clearTimer, warn, log });
+          this.job = null; this.live = new Set(); this.measurements = new Map();
+        }
+        cancel() {
+          if (this.job) this.job.finish();
+          try { this.synth?.cancel(); } catch { this.warn("浏览器未能停止语音。请检查设备声音，必要时关闭此页后再恢复训练。"); }
+        }
+        speak(cue) {
+          if (!this.synth || !this.makeUtterance) { this.warn("中文语音不可用，请查看页面并听提示音，或换支持中文语音的浏览器。"); return Promise.resolve(); }
+          if (this.job) this.cancel();
+          return new Promise(resolve => {
+            let utterance;
+            try { utterance = this.makeUtterance(cue); }
+            catch { this.warn("无法创建中文语音，当前使用视觉计时和可用的提示音。"); resolve(); return; }
+            const started = this.now();
+            let done = false, sawStart = false, timeout;
+            const finish = () => {
+              if (done) return; done = true; this.clearTimer(timeout);
+              this.live.delete(utterance); if (this.job?.utterance === utterance) this.job = null;
+              resolve();
+            };
+            this.job = { utterance, finish }; this.live.add(utterance);
+            utterance.onstart = () => { if (!done) { sawStart = true; this.log("speech-start",{cue}); } };
+            utterance.onend = () => {
+              if (!done) {
+                const duration = this.now()-started;
+                if (!sawStart || duration < 120) {
+                  this.warn("系统未正常启动中文语音，当前请看倒计时并听提示音。请检查系统中文语音和媒体音量，暂停后可重试。");
+                  this.log("speech-unavailable",{cue,duration,sawStart});
+                } else { this.measurements.set(cue,duration); this.log("speech-end",{cue,duration}); }
+              }
+              finish();
+            };
+            utterance.onerror = event => {
+              if (!done) { this.log("speech-error",{cue,error:event.error}); this.warn("语音播放失败，计时仍可使用。请看倒计时并检查媒体音量，必要时暂停后重试。"); }
+              finish();
+            };
+            timeout = this.setTimer(() => {
+              if (done) return;
+              this.warn("语音响应超时，已切回视觉计时和可用的提示音。请检查中文语音支持。");
+              this.cancel();
+            },Math.min(14000,Math.max(2500,cue.length*450)));
+            this.log("speech-request",{cue});
+            try { this.synth.speak(utterance); }
+            catch { this.warn("语音不可用，请查看倒计时并检查浏览器中文语音支持。"); finish(); }
+          });
+        }
+      }
+      class Store {
+        constructor(storage, prefix, warn = () => {}) { this.storage = storage; this.prefix = prefix; this.warn = warn; }
+        read(key) { const raw = this.storage.getItem(key); return raw === null ? null : JSON.parse(raw); }
+        loadProgress() {
+          try { return this.read(`${this.prefix}:progress`); }
+          catch { this.warn("无法读取训练进度（存储受限或内容损坏）。可开始新训练，但请先检查浏览器的网站存储权限。"); return null; }
+        }
+        saveProgress(value) {
+          try {
+            if (value) this.storage.setItem(`${this.prefix}:progress`, JSON.stringify(value));
+            else this.storage.removeItem(`${this.prefix}:progress`);
+            return true;
+          } catch { this.warn(value ? "当前进度未能保存。请允许网站存储并检查可用空间；关闭页面可能丢失本次进度。" : "未能清除当前进度，刷新后可能恢复旧进度。已完成的历史未删除；请检查网站存储权限。"); return false; }
+        }
+        history() {
+          const records = [];
+          try {
+            for (let i=0; i<this.storage.length; i++) {
+              const key = this.storage.key(i);
+              if (!key?.startsWith(`${this.prefix}:done:`)) continue;
+              try {
+                const r = this.read(key);
+                if (!validRecord(r) || key !== `${this.prefix}:done:${r.id}`) throw new Error("invalid record");
+                records.push(r);
+              } catch { this.warn("有无法读取的历史记录，已保留原数据。日历可能不完整，请勿清除网站数据。"); }
+            }
+          } catch { this.warn("无法读取打卡历史。请允许此浏览器的网站存储；当前日历不能确认完整记录。"); }
+          return records;
+        }
+        complete(record) {
+          if (!validRecord(record)) return false;
+          try {
+            const key = `${this.prefix}:done:${record.id}`;
+            const existing = this.read(key);
+            if (existing !== null && (!validRecord(existing) || existing.id !== record.id)) throw new Error("invalid record");
+            // One atomic key per session: retries/tabs never append duplicate records.
+            if (!existing) this.storage.setItem(key,JSON.stringify(record));
+            return true;
+          } catch { this.warn("本次已完成，但打卡未保存。请允许网站存储或释放空间，再点「重试保存打卡」。"); return false; }
+        }
+      }
+      return { VERSION, PROGRAM, stages, plan, Engine, Store, SpeechChannel, localDate, validDate, monthCells, weeklyCount };
+    })();
+  </script>
+  <script id="rehab-app">
     (() => {
       "use strict";
-
-      const params = new URLSearchParams(window.location.search);
-      const requestedDebugUnit = Number(params.get("debugMs"));
-      const isDebug = Number.isFinite(requestedDebugUnit) && requestedDebugUnit >= 20 && requestedDebugUnit < 1000;
-      const unitMs = isDebug ? requestedDebugUnit : 1000;
-      const prepMs = 30 * unitMs;
-      const workMs = 15 * unitMs;
-      const shortRestMs = 5 * unitMs;
-      const groupRestMs = 60 * unitMs;
-      const beepDurationSeconds = 0.16;
-      const beepFrequency = 880;
-      const plan = [];
-      let planCursor = 0;
-
-      const addInterval = (kind, group, rep, durationMs, cue) => {
-        plan.push({
-          index: plan.length,
-          kind,
-          group,
-          rep,
-          durationMs,
-          startMs: planCursor,
-          endMs: planCursor + durationMs,
-          cue
-        });
-        planCursor += durationMs;
-      };
-
-      addInterval("prep", null, null, prepMs, "准备，30秒");
-
-      for (let group = 1; group <= 2; group += 1) {
-        for (let rep = 1; rep <= 6; rep += 1) {
-          addInterval("work", group, rep, workMs, `第 ${group} 组，第 ${rep} 次，开始`);
-          if (rep < 6) {
-            addInterval("rest", group, rep, shortRestMs, "休息");
-          }
-        }
-
-        if (group === 1) {
-          addInterval("group-rest", 1, 6, groupRestMs, "组间休息一分钟");
-        }
-      }
-
-      const totalDurationMs = planCursor;
+      const { stages, plan, Engine, Store, SpeechChannel, monthCells, weeklyCount } = RehabCore;
+      const params = new URLSearchParams(location.search);
+      const debugMs = Number(params.get("debugMs"));
+      const isDebug = Number.isFinite(debugMs) && debugMs >= 20 && debugMs < 1000;
+      const unitMs = isDebug ? debugMs : 1000;
+      const isTest = isDebug || params.get("test") === "1";
+      // Debug is visual/beep-only. ?test=1 keeps real timing AND speech but isolates all data.
+      const prefix = isTest ? `rehab-timer:test:v1:${unitMs}` : "rehab-timer:v1";
+      const engine = new Engine(unitMs);
+      const $ = id => document.getElementById(id);
+      const text = (id,value) => { if ($(id).textContent !== value) $(id).textContent = value; };
+      const showMessage = (id,value) => { text(id,value); $(id).hidden = !value; };
       const events = [];
-      const startButton = document.querySelector("#startButton");
-      const skipPrepButton = document.querySelector("#skipPrepButton");
-      const resetButton = document.querySelector("#resetButton");
-      const phaseName = document.querySelector("#phaseName");
-      const positionCopy = document.querySelector("#positionCopy");
-      const countdown = document.querySelector("#countdown");
-      const countdownUnit = document.querySelector("#countdownUnit");
-      const nextCue = document.querySelector("#nextCue");
-      const laneProgress = document.querySelector("#laneProgress");
-      const audioStatusText = document.querySelector("#audioStatusText");
-      const compatibilityMessage = document.querySelector("#compatibilityMessage");
-      const debugBadge = document.querySelector("#debugBadge");
-
-      let audioContext = null;
-      let audioResumePromise = null;
-      let sessionAudioT0 = null;
-      let sessionPerfT0 = null;
-      let visualTimerId = null;
-      let watchdogId = null;
-      let pendingTimeouts = [];
-      let wakeLock = null;
-      let runId = 0;
-      let runState = "idle";
-      let scheduledNodes = [];
-      let launchedCueJobs = new Set();
-      let announcedIntervals = new Set();
-      // Keep SpeechSynthesisUtterance objects alive; Chromium otherwise GCs them and fires `end` immediately.
-      let liveUtterances = new Set();
-      let completionStarted = false;
-      let firstWorkCueStarted = false;
-      let prepEndOverrideMs = null;
-      let trainingDelayMs = null;
-      let lastRenderedInterval = -1;
-      let lastDisplayedSecond = null;
-      let measuredCueMs = {
-        work: null,
-        rest: null,
-        "group-rest": null
-      };
-      let chineseVoice = null;
-      const speechRate = isDebug ? 2 : 1.16;
-      const cueGapMs = isDebug ? 80 : 140;
-      const watchdogMs = 400;
-
-      const logEvent = (type, details = {}) => {
-        events.push({
-          type,
-          at: performance.now(),
-          elapsedMs: sessionAudioT0 === null && sessionPerfT0 === null ? null : getElapsedMs(),
-          ...details
-        });
-      };
-
-      const selectChineseVoice = () => {
-        const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-        chineseVoice = voices.find((voice) => /^zh[-_]/i.test(voice.lang)) ||
-          voices.find((voice) => /Chinese|中文|普通话|Mandarin/i.test(voice.name)) ||
-          null;
-      };
-
-      if ("speechSynthesis" in window) {
-        selectChineseVoice();
-        window.speechSynthesis.addEventListener("voiceschanged", selectChineseVoice);
+      const log = (type,detail={}) => { events.push({ type, at: performance.now(), ...detail }); if (events.length > 1200) events.shift(); };
+      let storage;
+      try { storage = localStorage; } catch { storage = null; }
+      const store = new Store(storage,prefix,message => showMessage("storageMessage",message));
+      let history = store.history();
+      let savedCompletion = false;
+      let audioContext = null, usesAudioClock = false, clock = () => performance.now();
+      let timer = null, generation = 0, wakeLock = null;
+      let nextCueIndex = -1, beepIndex = -1, lastSave = "", lastLane = "";
+      let pendingBeep = null, restored = false;
+      const nodes = new Set();
+      const issues = new Map();
+      const soundStatus = () => issues.has("speech") || issues.has("audio") ? "声音功能受限，请查看下方提示并以页面为准" : "以提示音为计时零点，请保持前台与媒体音量";
+      let month = new Date(); month = new Date(month.getFullYear(),month.getMonth(),1,12);
+      const warn = (key,message) => { issues.set(key,message); showMessage("compatibilityMessage",[...issues.values()].join(" ")); };
+      const speaker = new SpeechChannel({
+        synth: window.speechSynthesis,
+        makeUtterance: window.SpeechSynthesisUtterance ? cue => {
+          const utterance = new SpeechSynthesisUtterance(cue);
+          utterance.lang = "zh-CN"; utterance.rate = 1.25; utterance.volume = 1;
+          const voice = speechSynthesis.getVoices().find(v => /^zh[-_]/i.test(v.lang));
+          if (voice) utterance.voice = voice;
+          return utterance;
+        } : null,
+        now: () => performance.now(), setTimer: (fn,ms) => setTimeout(fn,ms), clearTimer: id => clearTimeout(id),
+        warn: message => warn("speech",message), log
+      });
+      function clearAudio() {
+        generation++; clearTimeout(timer); timer = null;
+        speaker.cancel();
+        for (const node of nodes) { try { node.stop(); } catch { /* Already ended. */ } }
+        nodes.clear(); nextCueIndex = -1; beepIndex = -1; pendingBeep = null;
       }
-
-      const buildLaneProgress = () => {
-        laneProgress.replaceChildren();
-        for (let group = 1; group <= 2; group += 1) {
-          const label = document.createElement("span");
-          label.className = "lane-label";
-          label.textContent = `第 ${group} 组`;
-          const cells = document.createElement("div");
-          cells.className = "lane-cells";
-          cells.dataset.group = String(group);
-          for (let rep = 1; rep <= 6; rep += 1) {
-            const cell = document.createElement("span");
-            cell.className = "lane-cell";
-            cell.dataset.group = String(group);
-            cell.dataset.rep = String(rep);
-            cell.dataset.state = "pending";
-            cell.setAttribute("aria-hidden", "true");
+      async function releaseWake() {
+        const lock = wakeLock; wakeLock = null;
+        if (lock) { try { await lock.release(); } catch { /* Already released by browser. */ } }
+      }
+      async function requestWake(token) {
+        if (wakeLock) return;
+        if (!navigator.wakeLock) { warn("wake","此浏览器不能保持屏幕常亮，请手动延长自动锁屏时间。"); return; }
+        try {
+          const lock = await navigator.wakeLock.request("screen");
+          if (token !== generation || !["cue","running"].includes(engine.state)) { await lock.release(); return; }
+          wakeLock = lock;
+          lock.addEventListener("release",() => { if (wakeLock === lock) wakeLock = null; });
+        } catch { warn("wake","未能保持屏幕常亮，请手动延长自动锁屏时间，并保持页面在前台。"); }
+      }
+      async function unlock(token) {
+        try {
+          const Audio = window.AudioContext || window.webkitAudioContext;
+          if (!Audio) throw new Error("no audio");
+          if (!audioContext) audioContext = new Audio();
+          await Promise.race([audioContext.resume(),new Promise((_,reject) => setTimeout(() => reject(new Error("audio timeout")),1500))]);
+          if (token !== generation) return;
+          if (audioContext.state !== "running") throw new Error("audio suspended");
+          usesAudioClock = true; clock = () => audioContext.currentTime*1000;
+        } catch {
+          if (token !== generation) return;
+          usesAudioClock = false; clock = () => performance.now();
+          warn("audio","提示音不可用，当前使用视觉计时。请查看倒计时，或换支持 Web Audio 的浏览器后重试。");
+        }
+      }
+      function cueFor(item, full=false) {
+        if (item.kind === "prep") return "准备，30秒";
+        if (item.kind === "group-rest") return "第一组完成，组间休息一分钟";
+        if (item.kind === "rest") return "休息，5秒";
+        if (item.stage === 4) return `第${item.round}轮，${item.action}，30秒`;
+        const name = full ? `第${item.stage+1}项，${stages[item.stage].name}，${stages[item.stage].equipment}。` : "";
+        return `${name}第${item.group}组，第${item.rep}次，训练`;
+      }
+      function speak(cue) {
+        if (isDebug) { log("test-cue",{cue}); return Promise.resolve(); }
+        return speaker.speak(cue);
+      }
+      function beep(at,index) {
+        if (!audioContext || audioContext.state !== "running") { log("visual-zero",{index}); return; }
+        const when = Math.max(audioContext.currentTime,at/1000);
+        try {
+          const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
+          oscillator.frequency.value = 880;
+          gain.gain.setValueAtTime(.0001,when); gain.gain.exponentialRampToValueAtTime(.34,when+.008);
+          gain.gain.exponentialRampToValueAtTime(.0001,when+(isDebug ? .035 : .16));
+          oscillator.connect(gain); gain.connect(audioContext.destination);
+          nodes.add(oscillator); oscillator.onended = () => { nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
+          oscillator.start(when); oscillator.stop(when+(isDebug ? .045 : .17));
+          log("beep-scheduled",{index,audioTime:when});
+        } catch { warn("audio","提示音播放失败，请查看倒计时，暂停后可重试。"); }
+      }
+      function checkpoint(force=false) {
+        const snap = engine.snapshot();
+        const key = snap ? `${snap.id}:${snap.index}:${snap.state}:${Math.ceil(snap.remaining/unitMs)}` : "idle";
+        if (force || key !== lastSave) { if (store.saveProgress(snap)) lastSave = key; }
+      }
+      function finishSave() {
+        // Persist terminal intent first. A crash between writes can safely retry by ID.
+        store.saveProgress(engine.snapshot());
+        savedCompletion = store.complete(engine.completion);
+        if (savedCompletion) {
+          store.saveProgress(null);
+          history = store.history();
+        }
+        renderCalendar(); render();
+      }
+      function renderCalendar() {
+        const today = new Date();
+        text("monthTitle",`${month.getFullYear()} 年 ${month.getMonth()+1} 月`);
+        text("weeklySummary",`本周完成 ${weeklyCount(history,today)} 次 · 计划每周 3-4 次`);
+        const grid = $("calendarGrid"); grid.replaceChildren();
+        for (const day of ["一","二","三","四","五","六","日"]) {
+          const el = document.createElement("span"); el.className = "weekday"; el.textContent = day; el.setAttribute("aria-hidden","true"); grid.append(el);
+        }
+        for (const cell of monthCells(month.getFullYear(),month.getMonth(),history,today)) {
+          const el = document.createElement("div");
+          if (!cell) { el.setAttribute("aria-hidden","true"); grid.append(el); continue; }
+          el.className = "calendar-day"; el.dataset.complete = cell.complete;
+          el.setAttribute("role","listitem"); el.setAttribute("aria-label",`${cell.date}${cell.today?"，今天":""}${cell.complete?"，已完成训练":"，无完整打卡"}`);
+          if (cell.today) el.setAttribute("aria-current","date");
+          const number = document.createElement("span"); number.textContent = cell.day; el.append(number);
+          if (cell.today || cell.complete) { const label = document.createElement("small"); label.textContent = cell.today ? (cell.complete?"今天·完成":"今天") : "完成"; el.append(label); }
+          grid.append(el);
+        }
+        text("calendarNote",`${isTest?"以下仅为测试记录。":""}${history.length?"实心日期表示有完整训练；同日多次仅标记一天。":"还没有完整训练记录。完成全部五项后，这里会标记完成日期。"} 描边表示今天；每周按周一至周日统计，不设连续打卡目标。`);
+      }
+      function stagePoints() {
+        const active = engine.state === "idle" ? 0 : engine.interval.stage;
+        [...$("stageProgress").children].forEach((el,i) => {
+          const state = engine.state === "finished" || i<active ? "complete" : i===active ? "current" : "pending";
+          el.dataset.state = state;
+          if (state === "current") el.setAttribute("aria-current","step"); else el.removeAttribute("aria-current");
+          const label = {complete:"已完成",current:engine.state==="idle"?"待开始":"当前项",pending:"待进行"}[state];
+          el.querySelector(".stage-status").textContent = label;
+          el.setAttribute("aria-label",`${i+1}，${stages[i].name}${stages[i].equipment?`，${stages[i].equipment}`:""}，${label}`);
+        });
+      }
+      function lanes() {
+        const item = engine.interval, key = `${engine.index}:${engine.state}`;
+        if (lastLane === key) return; lastLane = key;
+        const root = $("laneProgress"); root.replaceChildren();
+        const groups = item.stage===4 ? [1] : [1,2];
+        for (const group of groups) {
+          const label = document.createElement("span"); label.className = "lane-label"; label.textContent = item.stage===4?"四轮交替":`第 ${group} 组`;
+          const cells = document.createElement("div"); cells.className = "lane-cells";
+          const works = plan.filter(p => p.stage===item.stage && (item.stage===4 || (p.group===group && p.kind==="work")));
+          cells.style.gridTemplateColumns = `repeat(${works.length},minmax(0,1fr))`;
+          for (const work of works) {
+            const cell = document.createElement("span"); cell.className = "lane-cell"; cell.setAttribute("aria-hidden","true");
+            cell.dataset.state = engine.state === "finished" || work.index<engine.index ? "complete" : work.index===engine.index && !["ready","cue"].includes(engine.state)?"active":"pending";
             cells.append(cell);
           }
-          laneProgress.append(label, cells);
+          root.append(label,cells);
         }
-      };
-
-      const updateLaneProgress = (activeInterval) => {
-        document.querySelectorAll(".lane-cell").forEach((cell) => {
-          const group = Number(cell.dataset.group);
-          const rep = Number(cell.dataset.rep);
-          let state = "pending";
-
-          if (activeInterval && activeInterval.kind !== "prep") {
-            const isCurrent = group === activeInterval.group && rep === activeInterval.rep;
-            const isBefore = group < activeInterval.group || (group === activeInterval.group && rep < activeInterval.rep);
-
-            if (isBefore || (isCurrent && activeInterval.kind !== "work")) {
-              state = "complete";
-            } else if (isCurrent && activeInterval.kind === "work") {
-              state = "active";
-            }
-          }
-
-          cell.dataset.state = state;
-        });
-      };
-
-      const setError = (message) => {
-        compatibilityMessage.textContent = message;
-        compatibilityMessage.dataset.visible = "true";
-      };
-
-      const clearError = () => {
-        compatibilityMessage.textContent = "";
-        compatibilityMessage.dataset.visible = "false";
-      };
-
-      const requestWakeLock = async () => {
-        if (!("wakeLock" in navigator) || document.visibilityState !== "visible") {
-          return;
-        }
-
-        try {
-          wakeLock = await navigator.wakeLock.request("screen");
-          logEvent("wake-lock", { state: "acquired" });
-          wakeLock.addEventListener("release", () => {
-            logEvent("wake-lock", { state: "released" });
-          }, { once: true });
-        } catch (error) {
-          logEvent("wake-lock", { state: "unavailable", error: String(error) });
-        }
-      };
-
-      const releaseWakeLock = async () => {
-        if (!wakeLock) {
-          return;
-        }
-
-        try {
-          await wakeLock.release();
-        } catch (error) {
-          logEvent("wake-lock", { state: "release-error", error: String(error) });
-        } finally {
-          wakeLock = null;
-        }
-      };
-
-      const unlockAudio = () => {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) {
-          throw new Error("此浏览器不支持 Web Audio 提示音。");
-        }
-
-        if (!audioContext || audioContext.state === "closed") {
-          audioContext = new AudioContextClass();
-        }
-
-        audioResumePromise = audioContext.resume();
-
-        const silentBuffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
-        const silentSource = audioContext.createBufferSource();
-        silentSource.buffer = silentBuffer;
-        silentSource.connect(audioContext.destination);
-        silentSource.start();
-        logEvent("audio-unlock-request", { state: audioContext.state });
-      };
-
-      const getElapsedMs = () => {
-        if (audioContext && sessionAudioT0 !== null && audioContext.state === "running") {
-          return (audioContext.currentTime - sessionAudioT0) * 1000;
-        }
-
-        if (sessionPerfT0 !== null) {
-          return performance.now() - sessionPerfT0;
-        }
-
-        return 0;
-      };
-
-      const queueTimeout = (fn, delayMs) => {
-        const id = window.setTimeout(fn, Math.max(0, delayMs));
-        pendingTimeouts.push(id);
-        return id;
-      };
-
-      const clearTimers = () => {
-        if (visualTimerId !== null) {
-          window.clearTimeout(visualTimerId);
-          visualTimerId = null;
-        }
-
-        if (watchdogId !== null) {
-          window.clearInterval(watchdogId);
-          watchdogId = null;
-        }
-
-        pendingTimeouts.forEach((id) => {
-          window.clearTimeout(id);
-          window.clearInterval(id);
-        });
-        pendingTimeouts = [];
-      };
-
-      const setText = (element, value) => {
-        if (element.textContent !== value) {
-          element.textContent = value;
-        }
-      };
-
-      const estimateCueMs = (text) => {
-        const chars = Array.from(text).length;
-        const charsPerSec = 4.2 * speechRate;
-        const latencyMs = isDebug ? 160 : 420;
-        const tailMs = isDebug ? 80 : 220;
-        return Math.round(latencyMs + (chars / charsPerSec) * 1000 + tailMs);
-      };
-
-      const measuredOrEstimatedCueMs = (interval) => {
-        const measured = measuredCueMs[interval.kind];
-        return measured === null ? estimateCueMs(interval.cue) : measured;
-      };
-
-      const recordCueDuration = (kind, durationMs) => {
-        if (!Object.prototype.hasOwnProperty.call(measuredCueMs, kind) || durationMs < 400) {
-          return;
-        }
-
-        const previous = measuredCueMs[kind];
-        measuredCueMs[kind] = previous === null ? durationMs : Math.round(previous * 0.4 + durationMs * 0.6);
-      };
-
-      const runtimeStartMs = (interval) => {
-        if (interval.kind === "prep") {
-          return interval.startMs;
-        }
-        return trainingDelayMs === null ? Infinity : interval.startMs + trainingDelayMs;
-      };
-
-      const runtimeEndMs = (interval) => {
-        if (interval.kind === "prep" && prepEndOverrideMs !== null) {
-          return prepEndOverrideMs;
-        }
-
-        return runtimeStartMs(interval) + interval.durationMs;
-      };
-      const runtimeTotalDurationMs = () => trainingDelayMs === null ? Infinity : totalDurationMs + trainingDelayMs;
-
-      const cueAtMs = (interval) => {
-        const previousInterval = plan[interval.index - 1];
-        const intervalStart = runtimeStartMs(interval);
-        const previousStart = runtimeStartMs(previousInterval);
-        const desiredLead = measuredOrEstimatedCueMs(interval) + cueGapMs;
-        const earliest = previousStart + Math.min(250, Math.max(80, previousInterval.durationMs * 0.08));
-        return Math.max(earliest, intervalStart - desiredLead);
-      };
-
-      const createUtterance = (text, currentRun, metadata = {}) => {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "zh-CN";
-        utterance.rate = speechRate;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-
-        if (chineseVoice) {
-          utterance.voice = chineseVoice;
-        }
-
-        liveUtterances.add(utterance);
-        const release = () => liveUtterances.delete(utterance);
-        utterance.addEventListener("end", release, { once: true });
-        utterance.addEventListener("error", release, { once: true });
-
-        utterance.addEventListener("start", () => {
-          if (runId === currentRun) {
-            logEvent("speech-start", { cue: text, ...metadata });
-          }
-        });
-
-        utterance.addEventListener("end", () => {
-          if (runId === currentRun) {
-            logEvent("speech-end", { cue: text, ...metadata });
-          }
-        });
-
-        return utterance;
-      };
-
-      const awaitSpeech = (utterance, fallbackMs) => new Promise((resolve) => {
-        const startedAt = performance.now();
-        let finished = false;
-        let pollId = null;
-
-        const finish = (force = false) => {
-          if (finished) {
-            return;
-          }
-
-          const elapsed = performance.now() - startedAt;
-          const stillSpeaking = Boolean(window.speechSynthesis?.speaking || window.speechSynthesis?.pending);
-
-          if (stillSpeaking && !force) {
-            return;
-          }
-
-          if (!force && elapsed < fallbackMs * 0.45) {
-            queueTimeout(() => finish(), Math.max(0, fallbackMs - elapsed));
-            return;
-          }
-
-          finished = true;
-          if (pollId !== null) {
-            window.clearInterval(pollId);
-            pollId = null;
-          }
-          resolve(elapsed);
-        };
-
-        utterance.addEventListener("end", () => finish(), { once: true });
-        utterance.addEventListener("error", () => finish(), { once: true });
-        pollId = window.setInterval(() => {
-          if (finished) {
-            window.clearInterval(pollId);
-            pollId = null;
-            return;
-          }
-
-          if (!window.speechSynthesis?.speaking && !window.speechSynthesis?.pending && performance.now() - startedAt > 200) {
-            finish();
-          }
-        }, 200);
-        pendingTimeouts.push(pollId);
-        queueTimeout(() => finish(true), fallbackMs * 2 + 1200);
-      });
-
-      const speakScheduledCue = (interval, currentRun) => {
-        if (runId !== currentRun || runState !== "running") {
-          return;
-        }
-
-        const scheduledOffsetMs = runtimeStartMs(interval);
-        const requestAt = performance.now();
-        const utterance = createUtterance(interval.cue, currentRun, {
-          intervalIndex: interval.index,
-          plannedOffsetMs: interval.startMs,
-          scheduledOffsetMs
-        });
-
-        utterance.addEventListener("end", () => {
-          recordCueDuration(interval.kind, performance.now() - requestAt);
-        }, { once: true });
-
-        utterance.addEventListener("error", (event) => {
-          if (runId === currentRun && event.error !== "canceled" && event.error !== "interrupted") {
-            setError("语音播放失败。请停止并重置，然后检查设备音量后重试。");
-            logEvent("speech-error", { cue: interval.cue, error: event.error });
-          }
-        });
-
-        logEvent("speech-request", {
-          cue: interval.cue,
-          intervalIndex: interval.index,
-          plannedOffsetMs: interval.startMs,
-          scheduledOffsetMs,
-          cueAtMs: cueAtMs(interval)
-        });
-        window.speechSynthesis.speak(utterance);
-      };
-
-      const scheduleBeep = (interval, currentRun) => {
-        const scheduledOffsetMs = runtimeStartMs(interval);
-        const startAt = sessionAudioT0 + scheduledOffsetMs / 1000;
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(beepFrequency, startAt);
-        gain.gain.setValueAtTime(0.0001, startAt);
-        gain.gain.exponentialRampToValueAtTime(0.34, startAt + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + beepDurationSeconds);
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-        oscillator.start(startAt);
-        oscillator.stop(startAt + beepDurationSeconds + 0.01);
-        scheduledNodes.push({ oscillator, gain });
-        logEvent("beep-scheduled", {
-          intervalIndex: interval.index,
-          kind: interval.kind,
-          plannedOffsetMs: interval.startMs,
-          scheduledOffsetMs,
-          audioTime: startAt,
-          run: currentRun
-        });
-      };
-
-      const cancelScheduledAudio = () => {
-        scheduledNodes.forEach(({ oscillator }) => {
-          try {
-            oscillator.stop();
-          } catch (error) {
-            // The oscillator may already have stopped.
-          }
-        });
-        scheduledNodes = [];
-      };
-
-      const renderInterval = (interval, elapsedMs) => {
-        const remainingMs = Math.max(0, runtimeEndMs(interval) - elapsedMs);
-        const remainingUnits = Math.max(0, Math.ceil(remainingMs / unitMs - 1e-6));
-        setText(countdown, String(remainingUnits));
-        setText(countdownUnit, "秒");
-
-        if (interval.kind === "prep") {
-          setText(phaseName, "准备");
-          setText(positionCopy, "30 秒准备时间");
-        } else if (interval.kind === "work") {
-          setText(phaseName, "训练");
-          setText(positionCopy, `第 ${interval.group} 组 · 第 ${interval.rep} 次`);
-        } else if (interval.kind === "rest") {
-          setText(phaseName, "休息");
-          setText(positionCopy, `第 ${interval.group} 组 · 第 ${interval.rep} 次完成`);
-        } else {
-          setText(phaseName, "组间休息");
-          setText(positionCopy, "第 1 组完成 · 下一组即将开始");
-        }
-
-        const upcoming = plan[interval.index + 1];
-        if (!upcoming) {
-          setText(nextCue, "本次训练即将完成");
-        } else if (interval.kind === "prep") {
-          setText(nextCue, "倒计时结束后播报第 1 组开始提示");
-        } else if (upcoming.kind === "work") {
-          setText(nextCue, `下一阶段：第 ${upcoming.group} 组，第 ${upcoming.rep} 次`);
-        } else if (upcoming.kind === "group-rest") {
-          setText(nextCue, "本次结束后直接进入一分钟组间休息");
-        } else {
-          setText(nextCue, "本次结束后休息 5 秒");
-        }
-
-        if (lastRenderedInterval !== interval.index) {
-          updateLaneProgress(interval);
-          lastRenderedInterval = interval.index;
-        }
-
-        lastDisplayedSecond = remainingUnits;
-        return remainingMs;
-      };
-
-      const activeIntervalAt = (elapsedMs) => {
-        for (let index = 0; index < plan.length; index += 1) {
-          const interval = plan[index];
-          const startMs = runtimeStartMs(interval);
-          if (elapsedMs >= startMs && elapsedMs < runtimeEndMs(interval)) {
-            return interval;
-          }
-        }
-
-        return null;
-      };
-
-      const markIntervalStart = (interval, elapsedMs) => {
-        if (announcedIntervals.has(interval.index)) {
-          return;
-        }
-
-        announcedIntervals.add(interval.index);
-        const scheduledOffsetMs = runtimeStartMs(interval);
-        logEvent("beep-boundary", {
-          intervalIndex: interval.index,
-          kind: interval.kind,
-          group: interval.group,
-          rep: interval.rep,
-          plannedOffsetMs: interval.startMs,
-          scheduledOffsetMs,
-          timingErrorMs: elapsedMs - scheduledOffsetMs
-        });
-        logEvent("interval-start", {
-          intervalIndex: interval.index,
-          kind: interval.kind,
-          group: interval.group,
-          rep: interval.rep,
-          plannedOffsetMs: interval.startMs,
-          scheduledOffsetMs
-        });
-      };
-
-      const scheduleVisual = (currentRun) => {
-        if (visualTimerId !== null) {
-          window.clearTimeout(visualTimerId);
-          visualTimerId = null;
-        }
-
-        const tick = () => {
-          if (runId !== currentRun || (runState !== "running" && runState !== "finishing")) {
-            return;
-          }
-
-          const elapsedMs = getElapsedMs();
-          if (elapsedMs < 0) {
-            visualTimerId = window.setTimeout(tick, Math.max(16, -elapsedMs));
-            return;
-          }
-
-          const activeInterval = activeIntervalAt(elapsedMs);
-          let delayMs = unitMs;
-
-          if (activeInterval) {
-            markIntervalStart(activeInterval, elapsedMs);
-            const remainingMs = renderInterval(activeInterval, elapsedMs);
-            const displayed = lastDisplayedSecond;
-            if (displayed <= 0) {
-              delayMs = Math.max(16, runtimeEndMs(activeInterval) - elapsedMs);
-            } else {
-              const nextChangeRemaining = (displayed - 1) * unitMs;
-              delayMs = Math.max(16, remainingMs - nextChangeRemaining);
-            }
-          } else {
-            delayMs = isDebug ? 50 : 100;
-          }
-
-          visualTimerId = window.setTimeout(tick, delayMs);
-        };
-
-        tick();
-      };
-
-      const finalizeSession = (currentRun) => {
-        if (runId !== currentRun || runState === "finished") {
-          return;
-        }
-
-        runState = "finished";
-        clearTimers();
-        phaseName.textContent = "训练完成";
-        positionCopy.textContent = "2 组 · 12 次全部完成";
-        countdown.textContent = "✓";
-        countdownUnit.textContent = "";
-        nextCue.textContent = "可以停止并重置，准备下一次训练";
-        audioStatusText.textContent = "训练结束语音已播放";
-        updateLaneProgress({ group: 3, rep: 1, kind: "work" });
-        logEvent("session-finished", {
-          plannedOffsetMs: totalDurationMs,
-          scheduledOffsetMs: runtimeTotalDurationMs()
-        });
-        releaseWakeLock();
-      };
-
-      const announceCompletion = (currentRun) => {
-        if (completionStarted || runId !== currentRun || runState !== "running") {
-          return;
-        }
-
-        completionStarted = true;
-        runState = "finishing";
-        clearTimers();
-        phaseName.textContent = "训练完成";
-        positionCopy.textContent = "正在播报结束提示";
-        countdown.textContent = "0";
-        countdownUnit.textContent = "秒";
-        nextCue.textContent = "没有额外休息";
-
-        const completionOffsetMs = runtimeTotalDurationMs();
-        const utterance = createUtterance("训练结束", currentRun, {
-          kind: "completion",
-          plannedOffsetMs: totalDurationMs,
-          scheduledOffsetMs: completionOffsetMs
-        });
-        utterance.addEventListener("error", (event) => {
-          if (runId === currentRun && event.error !== "canceled" && event.error !== "interrupted") {
-            setError("结束语音播放失败，但训练计时已经停止。");
-            logEvent("speech-error", { cue: "训练结束", error: event.error });
-            finalizeSession(currentRun);
-          }
-        }, { once: true });
-        logEvent("speech-request", {
-          cue: "训练结束",
-          kind: "completion",
-          plannedOffsetMs: totalDurationMs,
-          scheduledOffsetMs: completionOffsetMs
-        });
-        window.speechSynthesis.speak(utterance);
-        awaitSpeech(utterance, estimateCueMs("训练结束")).then(() => {
-          if (runId === currentRun) {
-            finalizeSession(currentRun);
-          }
-        });
-      };
-
-      const armTrainingTimeline = (currentRun) => {
-        if (runId !== currentRun || runState !== "running" || trainingDelayMs !== null) {
-          return;
-        }
-
-        const leadSeconds = 0.06;
-        const firstWork = plan[1];
-        const firstWorkAudioTime = audioContext.currentTime + leadSeconds;
-        trainingDelayMs = (firstWorkAudioTime - sessionAudioT0) * 1000 - firstWork.startMs;
-        plan.slice(1).forEach((interval) => scheduleBeep(interval, currentRun));
-        audioStatusText.textContent = "语音与提示音已启用";
-        logEvent("training-t0-set", {
-          audioTime: firstWorkAudioTime,
-          perfTime: sessionPerfT0 + runtimeStartMs(firstWork),
-          scheduledOffsetMs: runtimeStartMs(firstWork),
-          trainingIntervalCount: plan.length - 1,
-          measuredWorkCueMs: measuredCueMs.work
-        });
-
-        plan.slice(2).forEach((interval) => {
-          const delayMs = cueAtMs(interval) - getElapsedMs();
-          queueTimeout(() => {
-            if (runId !== currentRun || launchedCueJobs.has(interval.index) || runState !== "running") {
-              return;
-            }
-            launchedCueJobs.add(interval.index);
-            speakScheduledCue(interval, currentRun);
-          }, delayMs);
-        });
-
-        queueTimeout(() => {
-          if (runId === currentRun) {
-            announceCompletion(currentRun);
-          }
-        }, runtimeTotalDurationMs() - getElapsedMs());
-
-        scheduleVisual(currentRun);
-      };
-
-      const announceFirstWork = (currentRun) => {
-        if (firstWorkCueStarted || runId !== currentRun || runState !== "running") {
-          return;
-        }
-
-        firstWorkCueStarted = true;
-        setSkipPrepVisible(false);
-        const firstWork = plan[1];
-        launchedCueJobs.add(firstWork.index);
-        setText(phaseName, "准备完成");
-        setText(positionCopy, "正在播报第 1 组开始提示");
-        setText(countdown, "0");
-        setText(countdownUnit, "秒");
-        setText(nextCue, "提示音响起后开始 15 秒训练");
-        audioStatusText.textContent = "准备完成，正在播报训练提示";
-        lastDisplayedSecond = 0;
-
-        const requestAt = performance.now();
-        const utterance = createUtterance(firstWork.cue, currentRun, {
-          intervalIndex: firstWork.index,
-          plannedOffsetMs: firstWork.startMs,
-          prepTransition: true
-        });
-
-        utterance.addEventListener("error", (event) => {
-          if (runId !== currentRun || event.error === "canceled" || event.error === "interrupted") {
-            return;
-          }
-          runState = "error";
-          clearTimers();
-          cancelScheduledAudio();
-          setText(phaseName, "无法开始");
-          setText(positionCopy, "第 1 组开始提示播放失败");
-          setText(nextCue, "请停止并重置，然后检查设备音量后重试");
-          setError("训练开始语音没有成功播放。请停止并重置，然后检查设备音量后重试。");
-          logEvent("speech-error", { cue: firstWork.cue, error: event.error, prepTransition: true });
-          releaseWakeLock();
-        }, { once: true });
-
-        logEvent("speech-request", {
-          cue: firstWork.cue,
-          intervalIndex: firstWork.index,
-          plannedOffsetMs: firstWork.startMs,
-          prepTransition: true
-        });
-        window.speechSynthesis.speak(utterance);
-
-        awaitSpeech(utterance, estimateCueMs(firstWork.cue)).then((speechMs) => {
-          if (runId !== currentRun || runState !== "running" || trainingDelayMs !== null) {
-            return;
-          }
-
-          recordCueDuration("work", Math.max(speechMs, performance.now() - requestAt));
-          armTrainingTimeline(currentRun);
-        });
-      };
-
-      const watchdogTick = (currentRun) => {
-        if (runId !== currentRun || runState !== "running") {
-          return;
-        }
-
-        if (audioContext && audioContext.state === "suspended") {
-          audioContext.resume();
-        }
-
-        const elapsedMs = getElapsedMs();
-        if (!firstWorkCueStarted && elapsedMs >= plan[0].endMs) {
-          announceFirstWork(currentRun);
-        }
-
-        if (trainingDelayMs === null) {
-          return;
-        }
-
-        for (const interval of plan.slice(2)) {
-          if (!launchedCueJobs.has(interval.index) && elapsedMs >= cueAtMs(interval)) {
-            launchedCueJobs.add(interval.index);
-            speakScheduledCue(interval, currentRun);
-          }
-        }
-
-        const activeInterval = activeIntervalAt(elapsedMs);
-        if (activeInterval) {
-          markIntervalStart(activeInterval, elapsedMs);
-        }
-
-        if (elapsedMs >= runtimeTotalDurationMs()) {
-          announceCompletion(currentRun);
-        }
-      };
-
-      const beginTimeline = (currentRun) => {
-        if (runId !== currentRun || runState !== "preparing") {
-          return;
-        }
-
-        runState = "running";
-        const leadSeconds = 0.06;
-        sessionAudioT0 = audioContext.currentTime + leadSeconds;
-        sessionPerfT0 = performance.now() + leadSeconds * 1000;
-        scheduleBeep(plan[0], currentRun);
-        audioStatusText.textContent = "语音与提示音已启用";
-        logEvent("session-t0-set", {
-          audioTime: sessionAudioT0,
-          perfTime: sessionPerfT0,
-          intervalCount: plan.length
-        });
-        queueTimeout(() => {
-          if (runId === currentRun) {
-            announceFirstWork(currentRun);
-          }
-        }, plan[0].endMs - getElapsedMs());
-        setSkipPrepVisible(true);
-        scheduleVisual(currentRun);
-        watchdogId = window.setInterval(() => watchdogTick(currentRun), watchdogMs);
-      };
-
-      const setSkipPrepVisible = (visible) => {
-        skipPrepButton.hidden = !visible;
-      };
-
-      const skipPrep = () => {
-        if (runState !== "running" || firstWorkCueStarted || trainingDelayMs !== null) {
-          return;
-        }
-
-        prepEndOverrideMs = Math.max(0, getElapsedMs());
-        logEvent("prep-skipped", { elapsedMs: prepEndOverrideMs });
-        setSkipPrepVisible(false);
-        announceFirstWork(runId);
-      };
-
-      const resetSession = () => {
-        runId += 1;
-        runState = "idle";
-        clearTimers();
-        window.speechSynthesis?.cancel();
-        liveUtterances = new Set();
-        cancelScheduledAudio();
-        releaseWakeLock();
-        sessionAudioT0 = null;
-        sessionPerfT0 = null;
-        launchedCueJobs = new Set();
-        announcedIntervals = new Set();
-        completionStarted = false;
-        firstWorkCueStarted = false;
-        prepEndOverrideMs = null;
-        trainingDelayMs = null;
-        lastRenderedInterval = -1;
-        lastDisplayedSecond = null;
-        measuredCueMs = {
-          work: null,
-          rest: null,
-          "group-rest": null
-        };
-        setSkipPrepVisible(false);
-        startButton.disabled = false;
-        startButton.querySelector(".start-label").textContent = "开始训练";
-        document.body.dataset.mode = "idle";
-        document.title = "康复训练计时器";
-        clearError();
-        buildLaneProgress();
-        logEvent("reset");
-      };
-
-      const startSession = () => {
-        if (runState !== "idle") {
-          return;
-        }
-
-        clearError();
-        if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
-          setError("此浏览器不支持中文语音播报，请更换支持 Web Speech 的浏览器。");
-          return;
-        }
-
-        const currentRun = ++runId;
-        runState = "preparing";
-        startButton.disabled = true;
-        startButton.querySelector(".start-label").textContent = "正在准备";
-        document.body.dataset.mode = "running";
-        phaseName.textContent = "准备";
-        positionCopy.textContent = "正在播报准备提示";
-        countdown.textContent = "30";
-        countdownUnit.textContent = "秒";
-        nextCue.textContent = "提示音响起后开始 30 秒准备";
-        audioStatusText.textContent = "正在解锁语音与提示音";
-        launchedCueJobs = new Set();
-        announcedIntervals = new Set();
-        completionStarted = false;
-        firstWorkCueStarted = false;
-        prepEndOverrideMs = null;
-        trainingDelayMs = null;
-        lastRenderedInterval = -1;
-        lastDisplayedSecond = null;
-        measuredCueMs = {
-          work: null,
-          rest: null,
-          "group-rest": null
-        };
-        setSkipPrepVisible(false);
-        buildLaneProgress();
-
-        try {
-          unlockAudio();
-        } catch (error) {
-          runState = "idle";
-          document.body.dataset.mode = "idle";
-          startButton.disabled = false;
-          startButton.querySelector(".start-label").textContent = "开始训练";
-          setError(error.message || "提示音初始化失败，请更换浏览器后重试。");
-          return;
-        }
-
-        requestWakeLock();
-        window.speechSynthesis.cancel();
-        const firstInterval = plan[0];
-        const utterance = createUtterance(firstInterval.cue, currentRun, {
-          intervalIndex: firstInterval.index,
-          plannedOffsetMs: firstInterval.startMs,
-          unlockCue: true
-        });
-
-        utterance.addEventListener("error", (event) => {
-          if (runId !== currentRun || event.error === "canceled" || event.error === "interrupted") {
-            return;
-          }
-          runState = "idle";
-          document.body.dataset.mode = "idle";
-          startButton.disabled = false;
-          startButton.querySelector(".start-label").textContent = "重新开始";
-          setError("语音没有成功播放。请确认设备未静音，然后再次点开始。");
-          logEvent("speech-error", { cue: firstInterval.cue, error: event.error, unlockCue: true });
-          clearTimers();
-          releaseWakeLock();
-        }, { once: true });
-
-        logEvent("speech-request", {
-          cue: firstInterval.cue,
-          intervalIndex: firstInterval.index,
-          plannedOffsetMs: firstInterval.startMs,
-          unlockCue: true
-        });
-        window.speechSynthesis.speak(utterance);
-        awaitSpeech(utterance, estimateCueMs(firstInterval.cue)).then(() => {
-          if (runId !== currentRun) {
-            return;
-          }
-          Promise.resolve(audioResumePromise).then(() => beginTimeline(currentRun));
-        });
-      };
-
-      startButton.addEventListener("click", startSession);
-      skipPrepButton.addEventListener("click", skipPrep);
-      resetButton.addEventListener("click", resetSession);
-
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && (runState === "running" || runState === "preparing" || runState === "finishing")) {
-          document.title = "康复训练计时器";
-          requestWakeLock();
-          if (audioContext && audioContext.state === "suspended") {
-            audioContext.resume();
-          }
-          if (runState === "running") {
-            scheduleVisual(runId);
-          }
-        } else if (document.visibilityState === "hidden" && runState !== "idle") {
-          document.title = "请返回训练计时器";
-          logEvent("visibility-warning", { state: "hidden" });
-        }
-      });
-
-      buildLaneProgress();
-      if (isDebug) {
-        debugBadge.dataset.visible = "true";
-        debugBadge.textContent = `调试计时：1 秒 = ${unitMs} 毫秒`;
       }
-
+      function nextText() {
+        const item = engine.interval, next = plan[engine.index+1];
+        if (!next) return "本段结束后：五项全部完成，自动打卡";
+        if (next.stage !== item.stage) return `本项结束后：等待你准备好，再开始第 ${next.stage+1} 项`;
+        if (item.kind === "prep") return "准备结束后：播报第一项，提示音响起开始训练";
+        if (next.stage===4) return `接着：第 ${next.round}/4 轮 · ${next.action} 30 秒（无休息）`;
+        if (next.kind === "group-rest") return "接着：组间休息 60 秒，可跳过";
+        if (next.kind === "rest") return "接着：重复间休息 5 秒";
+        return `接着：第 ${next.group}/2 组 · 第 ${next.rep}/6 次训练 15 秒`;
+      }
+      function render() {
+        const state = engine.state, item = engine.interval;
+        $("idlePanel").hidden = state !== "idle"; $("runningPanel").hidden = state === "idle";
+        stagePoints();
+        if (state === "idle") return;
+        text("exerciseName",`${item.stage+1}. ${stages[item.stage].name}`);
+        text("exerciseMeta",item.stage===4?"踮脚 30 秒 → 拉伸 30 秒 · 共 4 轮 · 中间不加休息":`${stages[item.stage].equipment} · 训练 15 秒 / 休息 5 秒 · 2 组 × 6 次 · 组间休息 60 秒`);
+        const phase = { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息",stretch:"拉伸" }[item.kind];
+        document.querySelector(".scoreboard").dataset.state = state;
+        $("actionName").hidden = item.stage < 4;
+        text("phaseName",state==="ready"?"下一项就位":state==="paused"?"已暂停":state==="cue"?"听提示":state==="finished"?"训练完成":phase);
+        text("actionName",state==="finished"?"五项全部完成":item.stage===4?item.action:item.kind==="prep"?"30 秒初始准备":phase);
+        text("positionCopy",state==="finished"?"第 4/4 轮拉伸已完成":item.stage===4?`第 ${item.round}/4 轮 · ${item.kind==="stretch"?"拉伸":"踮脚"}`:item.kind==="prep"?"第一项尚未开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
+        text("countdown",String(Math.max(0,Math.ceil(engine.remaining/unitMs-1e-6))));
+        text("countdownUnit",state==="ready"?"秒 · 确认后开始":state==="finished"?(savedCompletion?"打卡已保存":"打卡尚未保存"):state==="cue"?"秒 · 提示音后计时":"秒");
+        text("nextCue",state==="finished"?(savedCompletion?"记录保存在本浏览器的训练日历中":"请勿关闭页面，可重试保存打卡"):state==="ready"?"不会自动开始，也不另加倒计时准备":nextText());
+        $("continueButton").hidden = !["paused","ready"].includes(state);
+        text("continueButton",state==="ready"?"准备好了，开始下一项":restored?"继续已保存的训练":"继续训练");
+        $("pauseButton").hidden = !["running","cue"].includes(state);
+        $("skipPrepButton").hidden = state!=="running" || item.kind!=="prep";
+        $("skipRestButton").hidden = state!=="running" || item.kind!=="group-rest";
+        $("retrySaveButton").hidden = state!=="finished" || savedCompletion;
+        $("readyNote").hidden = !["ready","paused"].includes(state);
+        text("readyNote",state==="ready"?"上一项已完成。请调整姿势和器材，准备好后再点击下方按钮。":engine.reason || "本段剩余时间已保留，点击继续后从提示音开始计时。");
+        text("audioStatusText",isDebug?"测试模式：视觉计时与短提示音，不播语音":state==="paused" || state==="ready"?"计时与提示音已停，等待手动继续":soundStatus());
+        lanes();
+      }
+      function pause(reason="", conservative=false) {
+        if (!engine.pause(conservative && engine.state==="running"?engine.lastNow:clock())) return;
+        engine.reason = reason; clearAudio(); releaseWake(); checkpoint(true); render();
+        log("paused",{index:engine.index,remaining:engine.remaining,reason});
+      }
+      async function enterCue(resuming=false) {
+        clearAudio(); const token = generation;
+        render(); checkpoint(true);
+        await unlock(token); if (token!==generation || engine.state!=="cue") return;
+        requestWake(token);
+        const item = engine.interval;
+        const cue = resuming ? `${cueFor(item,true)}，继续剩余${Math.ceil(engine.remaining/unitMs)}秒` : cueFor(item,true);
+        await speak(cue);
+        if (token!==generation || engine.state!=="cue") return;
+        const zero = clock()+40;
+        beep(zero,item.index); engine.arm(zero); checkpoint(true); render();
+        log("interval-start",{index:item.index,kind:item.kind,stage:item.stage,zero});
+        timer = setTimeout(pump,Math.max(8,zero-clock()+8));
+      }
+      function pump() {
+        clearTimeout(timer);
+        if (engine.state!=="running") return;
+        if (usesAudioClock && audioContext.state!=="running") { pause("音频被浏览器暂停，请回到页面后点击继续。",true); return; }
+        const now = clock();
+        const result = engine.tick(now,new Date());
+        if (result === "late") { clearAudio(); releaseWake(); checkpoint(true); render(); log("late-paused"); return; }
+        if (result === "finished") {
+          clearAudio(); releaseWake(); finishSave(); speak("五项训练全部完成，训练结束"); log("session-finished",{id:engine.id,date:engine.completion.date,saved:savedCompletion}); return;
+        }
+        if (result === "ready") {
+          clearAudio(); releaseWake(); checkpoint(true); render();
+          speak(`第${engine.interval.stage}项完成。下一项，${stages[engine.interval.stage].name}。请调整姿势和器材，准备好后点击开始下一项。`);
+          log("stage-ready",{stage:engine.interval.stage}); return;
+        }
+        if (result === "cue") { enterCue(); return; }
+        if (result === "interval") {
+          if (speaker.job) { speaker.cancel(); warn("cue","部分语音未能在提示音前结束，已停止以免重叠。请以提示音和页面为准。"); }
+          if (beepIndex !== engine.index) beep(now,engine.index);
+          log("interval-start",{index:engine.index,kind:engine.interval.kind,stage:engine.interval.stage,zero:engine.deadline-engine.interval.seconds*unitMs});
+          nextCueIndex = -1; pendingBeep = null;
+        }
+        const next = plan[engine.index+1];
+        const automatic = next && next.stage===engine.interval.stage && engine.interval.kind!=="prep";
+        if (automatic) {
+          const cue = cueFor(next);
+          const lead = isDebug?0:(speaker.measurements.get(cue) || cue.length*210+450)+160;
+          if (engine.remaining<=lead && nextCueIndex!==next.index) { nextCueIndex=next.index; speak(cue); }
+          // Only arm the immediately upcoming beep close to its boundary.
+          if (engine.remaining<=Math.min(350,unitMs) && beepIndex!==next.index) {
+            if (speaker.job) { speaker.cancel(); warn("cue","部分语音未能在提示音前结束，已停止以免重叠。请以提示音和页面为准。"); }
+            beepIndex=next.index; pendingBeep=engine.deadline; beep(engine.deadline,next.index);
+          }
+        }
+        render(); checkpoint();
+        // Second-boundary display ticks with a bounded foreground heartbeat, never RAF/count-based elapsed time.
+        const toSecond = engine.remaining%unitMs || unitMs;
+        timer = setTimeout(pump,Math.max(8,Math.min(250,toSecond,engine.remaining)));
+      }
+      $("startButton").addEventListener("click",() => {
+        const id = window.crypto?.randomUUID?.() || `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        if (!engine.start(id)) return;
+        showMessage("runtimeMessage",""); savedCompletion=false; restored=false;
+        $("runningPanel").classList.add("reveal"); enterCue();
+      });
+      $("continueButton").addEventListener("click",() => {
+        const resuming = engine.state==="paused";
+        if (!engine.continue()) return;
+        restored=false; $("resetConfirm").hidden=true; enterCue(resuming);
+      });
+      $("pauseButton").addEventListener("click",() => pause());
+      for (const [id,kind] of [["skipPrepButton","prep"],["skipRestButton","group-rest"]]) {
+        $(id).addEventListener("click",() => {
+          if (engine.skip(kind,clock())) { log("rest-skipped",{kind,index:engine.index}); enterCue(); }
+          else {
+            clearAudio();
+            if (engine.state==="cue") enterCue();
+            else { if (engine.state==="running") pause("边界已变化，请确认后继续。",true); checkpoint(true); render(); }
+          }
+        });
+      }
+      $("resetButton").addEventListener("click",() => {
+        pause(); clearAudio(); $("resetConfirm").hidden=false; $("confirmResetButton").focus();
+      });
+      $("cancelResetButton").addEventListener("click",() => { $("resetConfirm").hidden=true; $("resetButton").focus(); });
+      $("confirmResetButton").addEventListener("click",() => {
+        clearAudio(); releaseWake(); engine.reset(); store.saveProgress(null); lastSave="";
+        savedCompletion=false; restored=false; $("resetConfirm").hidden=true; $("runningPanel").classList.remove("reveal");
+        render(); log("reset"); $("startButton").focus();
+      });
+      $("retrySaveButton").addEventListener("click",() => { showMessage("storageMessage",""); finishSave(); });
+      for (const [id,offset] of [["prevMonth",-1],["nextMonth",1]]) $(id).addEventListener("click",() => {
+        month = new Date(month.getFullYear(),month.getMonth()+offset,1,12); renderCalendar();
+      });
+      document.addEventListener("visibilitychange",() => {
+        if (document.hidden) { pause("页面离开前台，已暂停。回到页面后请手动继续。",true); clearAudio(); releaseWake(); }
+        else { renderCalendar(); render(); }
+      });
+      window.addEventListener("pagehide",() => { pause("页面已关闭或导航离开，进度已暂停。",true); clearAudio(); releaseWake(); });
+      window.addEventListener("storage",e => { if (e.key?.startsWith(`${prefix}:done:`)) { history=store.history(); renderCalendar(); } });
+      stages.forEach((stage,i) => {
+        const point = document.createElement("li"); point.className="stage-point";
+        point.innerHTML=`<span class="stage-number">${i+1}</span><span class="stage-label"></span><span class="stage-status"></span>`;
+        point.querySelector(".stage-label").textContent=stage.short; $("stageProgress").append(point);
+        const line = document.createElement("li"); line.textContent=`${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"15 秒训练 / 5 秒重复间休息，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮，无额外休息。"}`; $("routineList").append(line);
+      });
+      if (isTest) { $("debugBadge").hidden=false; text("debugBadge",isDebug?`测试计时：1 秒 = ${unitMs} 毫秒。无语音，仅存测试进度和测试打卡，不计入正式历史。`:"实时测试：标准时长与中文语音，仅存测试进度和打卡，不计入正式历史。"); }
+      const snapshot = store.loadProgress();
+      if (snapshot !== null) {
+        if (!engine.restore(snapshot)) showMessage("storageMessage","保存的进度格式损坏或版本不兼容，未恢复。历史打卡保持不变，可开始新训练。");
+        else {
+          restored=true;
+          const existing = history.find(record => record.id===engine.id);
+          if (existing) {
+            engine.index=plan.length-1; engine.remaining=0; engine.state="finished"; engine.completion=existing;
+            savedCompletion=true; store.saveProgress(null);
+          } else if (engine.state==="finished") finishSave();
+        }
+      }
+      render(); renderCalendar();
+      // Read-only observability: no bypass/complete hooks in either production or test mode.
       window.__rehabTimer = {
-        config: {
-          debug: isDebug,
-          unitMs,
-          prepMs,
-          workMs,
-          shortRestMs,
-          groupRestMs,
-          totalDurationMs
-        },
-        events,
-        getPlan: () => plan.map((interval) => ({ ...interval })),
-        getState: () => ({
-          runState,
-          audioState: audioContext ? audioContext.state : "not-created",
-          sessionAudioT0,
-          sessionPerfT0,
-          elapsedMs: sessionAudioT0 === null && sessionPerfT0 === null ? null : getElapsedMs(),
-          trainingDelayMs,
-          runtimeTotalDurationMs: runtimeTotalDurationMs(),
-          measuredCueMs: { ...measuredCueMs },
-          liveUtteranceCount: liveUtterances.size,
-          watchdogMs,
-          wakeLockActive: Boolean(wakeLock),
-          skipPrepVisible: !skipPrepButton.hidden,
-          queuedSpeech: window.speechSynthesis ? window.speechSynthesis.pending : false,
-          speaking: window.speechSynthesis ? window.speechSynthesis.speaking : false
-        }),
-        skipPrep,
-        getCueSchedule: () => plan.slice(2).map((interval) => ({
-          index: interval.index,
-          kind: interval.kind,
-          cue: interval.cue,
-          cueAtMs: trainingDelayMs === null ? null : cueAtMs(interval),
-          startMs: runtimeStartMs(interval),
-          estimatedCueMs: measuredOrEstimatedCueMs(interval)
-        })),
-        reset: resetSession
+        config: { debug:isDebug, test:isTest, unitMs, prefix, totalSeconds:plan.reduce((n,p)=>n+p.seconds,0) }, events,
+        getPlan: () => plan.map(p=>({...p})),
+        getState: () => ({ ...engine.snapshot(), runState:engine.state, savedCompletion, audioState:audioContext?.state || "not-created", liveUtteranceCount:speaker.live.size, pendingBeep, historyCount:history.length })
       };
     })();
   </script>
