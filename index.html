@@ -703,7 +703,9 @@
         const automatic = next && next.stage===engine.interval.stage && engine.interval.kind!=="prep";
         if (automatic) {
           const cue = cueFor(next);
-          const lead = isDebug?0:cues[cue][1]+650;
+          // Allow media startup plus the 250ms heartbeat before the fixed boundary.
+          // Production observed a 718ms decoder start even with a preloaded local Blob.
+          const lead = isDebug?0:cues[cue][1]+1000;
           if (engine.remaining<=lead && nextCueIndex!==next.index) { nextCueIndex=next.index; speak(cue); }
           // Only arm the immediately upcoming beep close to its boundary.
           if (engine.remaining<=Math.min(350,unitMs) && beepIndex!==next.index) {
