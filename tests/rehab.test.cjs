@@ -408,6 +408,21 @@ test('真实页面控制器：语音加载超界不会与提示音重叠，也�
   const count=f.requests.length;await f.advance(5000);assert.equal(f.requests.length,count);
   assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
 });
+test('生产回归：718ms媒体启动延迟仍能在短休结束前播完，不禁用后续声音', async () => {
+  const f=appFixture({mediaDelays:{continue:718}});await f.click('startButton');await f.advance(54000);
+  assert.equal(f.state().runState,'running');assert.equal(f.state().index,3);
+  assert.notEqual(f.state().mediaState,'unavailable');assert.equal(f.elements.get('audioStatusText').textContent,'');
+  const events=f.events(), ended=events.find(e=>e.type==='media-ended'&&e.key==='continue');
+  const zero=events.find(e=>e.type==='beep-request'&&e.index===3);
+  assert.ok(ended && zero);assert.ok(ended.at<zero.zero);
+  const starts=events.filter(e=>e.type==='interval-start');
+  assert.equal(starts[2].zero-starts[1].zero,15000);assert.equal(starts[3].zero-starts[2].zero,5000);
+});
+test('延迟超过预留量仍明确中断，不靠放宽结束判定或排队掩盖错误', async () => {
+  const f=appFixture({mediaDelays:{continue:1300}});await f.click('startButton');await f.advance(54000);
+  assert.equal(f.state().mediaState,'unavailable');assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
+  assert.equal(f.state().mediaJob,null);
+});
 test('真实页面控制器：提示音解码启动过晚则暂停，不冒充准时零点', async () => {
   const f=appFixture({beepDelay:300});await f.click('startButton');await f.advance(2000);
   assert.equal(f.state().runState,'paused');assert.equal(f.state().mediaState,'unavailable');
