@@ -40,9 +40,8 @@
       padding: max(24px, env(safe-area-inset-top)) 0 max(22px, env(safe-area-inset-bottom));
     }
     .site-header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 0 4px 22px; border-bottom: 1px solid var(--line); }
-    .site-header h1 { max-width: 12ch; font: 700 clamp(2rem,5vw,3.45rem)/.98 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
-    .session-formula { color: var(--muted); font-weight: 700; font-size: .95rem; line-height: 1.6; text-align: right; }
-    main { padding: 28px 0 36px; }
+    .site-header h1 { max-width: 100%; font: 700 clamp(2rem,5vw,3.45rem)/.98 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
+    main { padding: 20px 0 24px; }
     .stage-progress { list-style: none; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; margin: 0 0 26px; padding: 0; }
     .stage-point { min-width: 0; display: grid; justify-items: center; gap: 7px; text-align: center; color: var(--muted); }
     .stage-number { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #659da0; border-radius: 50%; background: var(--foam); font-weight: 800; font-size: 1.2rem; }
@@ -50,18 +49,13 @@
     .stage-point[data-state="complete"] .stage-number { background: var(--pool); border-color: var(--pool); color: white; }
     .stage-label { font-size: .88rem; font-weight: 700; line-height: 1.45; }
     .stage-status { font-size: .75rem; }
-    .idle-panel { display: grid; grid-template-columns: minmax(0,1fr) minmax(260px,.78fr); align-items: stretch; gap: 36px; }
-    .idle-copy { display: flex; flex-direction: column; justify-content: center; gap: 20px; }
-    .idle-copy h2 { max-width: 10ch; font: 700 clamp(2.55rem,7vw,4.6rem)/1.05 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
-    .idle-copy p { max-width: 31rem; color: var(--muted); font-size: 1.05rem; line-height: 1.7; }
-    .start-button { position: relative; display: grid; min-height: 280px; overflow: hidden; place-items: center; padding: 30px; border: 0; border-radius: var(--radius); background: var(--signal); box-shadow: var(--shadow); color: var(--pool-dark); isolation: isolate; transition: transform 220ms cubic-bezier(.16,1,.3,1); }
+    .start-button { position: relative; display: grid; width: 100%; min-height: 150px; overflow: hidden; place-items: center; padding: 24px; border: 0; border-radius: var(--radius); background: var(--signal); box-shadow: var(--shadow); color: var(--pool-dark); isolation: isolate; transition: transform 220ms cubic-bezier(.16,1,.3,1); }
     .start-button::before { position: absolute; z-index: -1; right: -52px; bottom: -66px; width: 210px; height: 210px; border: 28px solid rgba(247,251,249,.24); border-radius: 50%; content: ""; }
     .start-button:hover { transform: translateY(-3px); } .start-button:active { transform: translateY(1px); }
-    .start-inner { display: grid; justify-items: center; gap: 18px; }
+    .start-inner { display: flex; align-items: center; justify-content: center; gap: 24px; }
     .start-icon { width: 78px; height: 52px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 5; }
     .start-label { font: 700 clamp(2.5rem,6vw,4rem)/1 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; }
-    .start-note { color: #213b43; font-size: .95rem; font-weight: 700; line-height: 1.5; }
-    .routine-details { margin-top: 24px; color: var(--muted); line-height: 1.8; }
+    .routine-details { margin-top: 12px; color: var(--muted); line-height: 1.8; }
     summary { cursor: pointer; font-weight: 700; padding-block: 12px; }
     .routine-details ol { padding-left: 24px; margin: 8px 0; }
     .routine-details li { margin-bottom: 12px; }
@@ -73,7 +67,6 @@
     .running-panel.reveal .scoreboard { animation: scoreboard-in 500ms cubic-bezier(.16,1,.3,1) both; }
     .interval-state { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; padding: 32px; background: var(--pool-dark); }
     .phase-name { color: var(--water); font: 700 2.7rem/1.15 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; }
-    .action-name { font-size: 1.1rem; font-weight: 700; line-height: 1.6; margin-top: 14px; }
     .position-copy { color: #d9eeee; font-size: 1.1rem; font-weight: 700; line-height: 1.5; }
     .clock-field { display: grid; align-content: center; justify-items: center; min-width: 0; padding: 36px 24px; text-align: center; }
     .countdown { font: 800 6rem/.9 "Avenir Next Condensed", "DIN Condensed", "Arial Narrow", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
@@ -90,7 +83,8 @@
     .lane-cell[data-state="active"] { border-color: var(--signal-dark); background: var(--signal); transform: scaleY(1.5); }
     .running-actions, .running-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
     .running-actions { justify-content: space-between; }
-    .audio-status { color: var(--muted); font-size: .9rem; line-height: 1.6; }
+    .sound-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .audio-status { color: var(--danger); font-size: .9rem; line-height: 1.6; }
     .control { min-height: 52px; padding: 12px 22px; border: 1px solid var(--pool); border-radius: 999px; font-weight: 700; line-height: 1.5; background: var(--water); color: var(--pool-dark); }
     .control:hover { background: #d7f3f1; border-color: var(--pool-deep); }
     .control:active { transform: translateY(1px); }
@@ -98,7 +92,7 @@
     .control.primary:hover { background: #fa8454; }
     .control.danger { background: var(--foam); color: var(--danger); border-color: #6e9da0; }
     .control.danger:hover { background: #fff3f0; border-color: var(--danger); }
-    .ready-note, .notice { line-height: 1.65; }
+    .notice { line-height: 1.65; }
     .notice { padding: 12px 0; color: var(--danger); font-weight: 700; }
     .reset-confirm { border-top: 1px solid var(--line); padding-top: 16px; }
     .reset-confirm p { margin-bottom: 12px; line-height: 1.6; }
@@ -115,7 +109,6 @@
     .calendar-day[data-complete="true"] { background: var(--pool); color: white; }
     .calendar-day[aria-current="date"] { border: 2px solid var(--pool-dark); }
     .calendar-day small { font-size: .7rem; line-height: 1.3; }
-    .calendar-note { color: var(--muted); font-size: .88rem; line-height: 1.7; margin-top: 14px; }
     .page-footer { display: grid; gap: 10px; padding: 18px 4px 0; border-top: 1px solid var(--line); }
     .foreground-reminder { font-size: .95rem; font-weight: 700; line-height: 1.6; }
     .foreground-reminder strong { color: var(--signal-dark); }
@@ -130,16 +123,19 @@
       .app-shell { width: calc(100% - 40px); padding-top: max(18px,env(safe-area-inset-top)); }
       .site-header { gap: 12px; align-items: center; padding-bottom: 16px; }
       .site-header h1 { font-size: 1.85rem; }
-      .session-formula { font-size: .78rem; flex-shrink: 0; }
       .stage-progress { gap: 5px; margin-bottom: 22px; }
       .stage-number { width: 38px; height: 38px; }
       .stage-label { font-size: .75rem; } .stage-status { font-size: .7rem; }
-      .idle-panel { grid-template-columns: 1fr; gap: 24px; }
-      .idle-copy h2 { font-size: 2.6rem; }
-      .start-button { min-height: 210px; }
+      .start-button { min-height: 120px; }
+      .start-icon { width: 44px; height: 36px; }
+      .start-inner { gap: 14px; }
+      .start-label { font-size: 2.4rem; }
       .scoreboard { grid-template-columns: 1fr; min-height: 0; }
-      .interval-state { padding: 22px; gap: 18px; }
-      .phase-name { font-size: 2.4rem; }
+      .interval-state { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; padding: 18px; gap: 10px; }
+      .phase-name { font-size: 2rem; }
+      .position-copy { max-width: 9em; text-align: right; font-size: .95rem; }
+      .scoreboard[data-state="ready"] .interval-state { display: block; }
+      .scoreboard[data-state="ready"] .position-copy { display: none; }
       .clock-field { padding: 26px 22px; }
       .countdown { font-size: 5.5rem; }
       .exercise-heading { font-size: 1.15rem; }
@@ -156,32 +152,23 @@
   <div class="app-shell">
     <header class="site-header">
       <h1>康复训练计时器</h1>
-      <p class="session-formula">5 项顺序训练<br>语音引导 · 完整打卡</p>
     </header>
     <main>
       <p class="debug-badge" id="debugBadge" hidden></p>
       <ol class="stage-progress" id="stageProgress" aria-label="五项训练进度，仅展示，不可跳项"></ol>
-      <section id="idlePanel" aria-labelledby="idleTitle">
-        <div class="idle-panel">
-          <div class="idle-copy">
-            <h2 id="idleTitle">每项就位，<br>之后只需听。</h2>
-            <p>开始后有 30 秒准备。每项完成后，等你准备好再继续下一项。全部五项完成，自动记录一次训练。</p>
-          </div>
+      <section id="idlePanel" aria-label="开始训练">
           <button class="start-button" id="startButton" type="button">
             <span class="start-inner">
               <svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true"><path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/></svg>
               <span class="start-label">开始训练</span>
-              <span class="start-note">请先调高媒体音量</span>
             </span>
           </button>
-        </div>
-        <details class="routine-details"><summary>查看五项动作与用量</summary><ol id="routineList"></ol></details>
       </section>
       <section class="running-panel" id="runningPanel" aria-label="当前训练" hidden>
         <div><h2 class="exercise-heading" id="exerciseName"></h2><p class="exercise-meta" id="exerciseMeta"></p></div>
         <div class="scoreboard">
           <div class="interval-state">
-            <div><p class="phase-name" id="phaseName"></p><p class="action-name" id="actionName"></p></div>
+            <p class="phase-name" id="phaseName"></p>
             <p class="position-copy" id="positionCopy"></p>
           </div>
           <div class="clock-field">
@@ -190,9 +177,7 @@
           </div>
         </div>
         <div class="lane-progress" id="laneProgress" aria-label="当前项组次进度"></div>
-        <p class="ready-note" id="readyNote" hidden></p>
         <div class="running-actions">
-          <p class="audio-status" id="audioStatusText">请保持页面在前台</p>
           <div class="running-controls">
             <button class="control" id="pauseButton" type="button" hidden>暂停</button>
             <button class="control" id="skipPrepButton" type="button" hidden>跳过准备</button>
@@ -202,10 +187,17 @@
           </div>
         </div>
         <div class="reset-confirm" id="resetConfirm" hidden>
-          <p>结束本次训练？未完成的训练不打卡，已保存的历史不会删除。</p>
+          <p>结束本次？未完成不打卡，历史保留。</p>
           <div class="running-controls"><button class="control danger" id="confirmResetButton" type="button">确认结束本次</button><button class="control" id="cancelResetButton" type="button">保留进度</button></div>
         </div>
       </section>
+      <div class="sound-controls" aria-label="声音控制">
+        <button class="control" id="soundButton" type="button" aria-pressed="true">声音：开</button>
+        <button class="control" id="testSoundButton" type="button">试听声音</button>
+        <p class="audio-status" id="audioStatusText" role="status" hidden></p>
+      </div>
+      <audio id="cueAudio" preload="auto" playsinline src="audio/prepare.wav" hidden></audio>
+      <details class="routine-details"><summary>动作详情</summary><ol id="routineList"></ol></details>
       <p class="notice" id="runtimeMessage" role="status" hidden></p>
       <p class="notice" id="compatibilityMessage" role="status" hidden></p>
       <p class="notice" id="storageMessage" role="status" hidden></p>
@@ -218,11 +210,10 @@
         <button class="control" id="nextMonth" type="button" aria-label="下一个月">下月</button>
       </div>
       <div class="calendar-grid" id="calendarGrid" role="list" aria-label="本月日期"></div>
-      <p class="calendar-note" id="calendarNote"></p>
     </section>
     <footer class="page-footer">
-      <p class="foreground-reminder"><strong>训练时请勿锁屏，也不要切换 App。</strong>离开页面会暂停，返回后需手动继续。</p>
-      <p class="local-note">打卡和进度仅保存在当前浏览器、当前设备，不会跨设备同步；清除网站数据可能丢失。跨午夜的训练按全部完成时的本地日期记录。</p>
+      <p class="foreground-reminder"><strong>请勿锁屏或切 App。</strong>离开即暂停。</p>
+      <p class="local-note">记录仅存本浏览器，清除网站数据会丢失。</p>
     </footer>
   </div>
   <script id="rehab-core">
@@ -236,7 +227,7 @@
         { name: "左侧直抬腿", equipment: "1 kg", short: "直抬腿" },
         { name: "左髋内收抗阻静力训练", equipment: "弹力带 15 磅", short: "髋内收" },
         { name: "左踝内翻训练", equipment: "弹力带 15 磅", short: "踝内翻" },
-        { name: "左小腿踮脚静力训练 → 左小腿拉伸", equipment: "", short: "踮脚 / 拉伸" }
+        { name: "左小腿踮脚静力训练 → 左小腿拉伸", equipment: "", short: "踮脚/拉伸" }
       ];
       const makePlan = () => {
         const plan = [{ stage: 0, kind: "prep", seconds: 30 }];
@@ -293,7 +284,7 @@
           // Freeze at the last observed instant, including when the audio clock stops.
           const boundaryGrace = Math.min(1000, 2*this.unitMs);
           if (now < this.lastNow || now-this.lastNow > 1500 || now-this.deadline > boundaryGrace) {
-            this.pause(this.lastNow); this.reason = "计时回调延迟，已安全暂停，请确认动作后继续。"; return "late";
+            this.pause(this.lastNow); this.reason = "计时延迟，已暂停。"; return "late";
           }
           this.lastNow = now;
           this.remaining = Math.max(0,this.deadline-now);
@@ -344,57 +335,81 @@
           if (s.state === "ready" && (s.index === 0 || plan[s.index-1].stage === plan[s.index].stage || s.remaining !== plan[s.index].seconds*this.unitMs)) return false;
           this.id = s.id; this.index = s.index; this.remaining = s.remaining; this.completion = s.completion;
           this.state = s.state === "finished" ? "finished" : s.state === "ready" ? "ready" : "paused";
-          this.deadline = null; this.lastNow = null; this.reason = "已恢复保存的进度，未计入离开页面的时间。";
+          this.deadline = null; this.lastNow = null; this.reason = "进度已恢复。";
           return true;
         }
       }
-      class SpeechChannel {
-        constructor({ synth, makeUtterance, now, setTimer, clearTimer, warn, log }) {
-          Object.assign(this,{ synth, makeUtterance, now, setTimer, clearTimer, warn, log });
-          this.job = null; this.live = new Set(); this.measurements = new Map();
+      // Fixed, locally generated PCM recordings. No device voices or runtime TTS service.
+      const cues = Object.freeze({
+        prepare: ["准备",494], rest: ["休息",529], continue: ["训练继续",878],
+        "hip-extension": ["大腿后伸",1087], "leg-raise": ["直抬腿",888],
+        "hip-adduction": ["髋内收",819], "ankle-inversion": ["踝内翻",763],
+        "calf-raise": ["踮脚",584], stretch: ["拉伸",523],
+        next: ["下一项",701], complete: ["训练完成",903], test: ["声音测试",1145], beep: ["",170]
+      });
+      function cueFor(item, full=false) {
+        if (item.kind === "prep") return "prepare";
+        if (["rest","group-rest"].includes(item.kind)) return "rest";
+        if (item.stage === 4) return item.kind === "stretch" ? "stretch" : "calf-raise";
+        return full ? ["hip-extension","leg-raise","hip-adduction","ankle-inversion"][item.stage] : "continue";
+      }
+      class MediaChannel {
+        constructor({ media, sourceFor, now, setTimer, clearTimer, warn, recover, onPlaying, log }) {
+          Object.assign(this,{ media, sourceFor, now, setTimer, clearTimer, warn, recover, onPlaying, log });
+          this.job = null; this.failed = false;
         }
         cancel() {
-          if (this.job) this.job.finish();
-          try { this.synth?.cancel(); } catch { this.warn("浏览器未能停止语音。请检查设备声音，必要时关闭此页后再恢复训练。"); }
+          this.job?.finish("canceled");
+          try { this.media?.pause(); } catch { /* Nothing is playing. */ }
         }
-        speak(cue) {
-          if (!this.synth || !this.makeUtterance) { this.warn("中文语音不可用，请查看页面并听提示音，或换支持中文语音的浏览器。"); return Promise.resolve(); }
-          if (this.job) this.cancel();
+        play(key, retry=false) {
+          // Never enqueue: exactly one retained media element owns both speech and beeps.
+          this.cancel();
+          if (retry) this.failed = false;
+          if (this.failed) return Promise.resolve("unavailable");
+          const fail = reason => {
+            this.failed = true; this.log("media-error",{key,reason});
+            this.warn("声音未播放，请重试声音。");
+          };
+          if (!this.media || !cues[key]) { fail("unsupported"); return Promise.resolve("unavailable"); }
           return new Promise(resolve => {
-            let utterance;
-            try { utterance = this.makeUtterance(cue); }
-            catch { this.warn("无法创建中文语音，当前使用视觉计时和可用的提示音。"); resolve(); return; }
-            const started = this.now();
-            let done = false, sawStart = false, timeout;
-            const finish = () => {
+            const media = this.media, started = this.now();
+            let done = false, sawPlaying = false, timeout;
+            const finish = result => {
               if (done) return; done = true; this.clearTimer(timeout);
-              this.live.delete(utterance); if (this.job?.utterance === utterance) this.job = null;
-              resolve();
+              media.onplaying = media.onended = media.onerror = null;
+              if (this.job?.finish === finish) this.job = null;
+              resolve(result);
             };
-            this.job = { utterance, finish }; this.live.add(utterance);
-            utterance.onstart = () => { if (!done) { sawStart = true; this.log("speech-start",{cue}); } };
-            utterance.onend = () => {
-              if (!done) {
-                const duration = this.now()-started;
-                if (!sawStart || duration < 120) {
-                  this.warn("系统未正常启动中文语音，当前请看倒计时并听提示音。请检查系统中文语音和媒体音量，暂停后可重试。");
-                  this.log("speech-unavailable",{cue,duration,sawStart});
-                } else { this.measurements.set(cue,duration); this.log("speech-end",{cue,duration}); }
-              }
-              finish();
-            };
-            utterance.onerror = event => {
-              if (!done) { this.log("speech-error",{cue,error:event.error}); this.warn("语音播放失败，计时仍可使用。请看倒计时并检查媒体音量，必要时暂停后重试。"); }
-              finish();
-            };
-            timeout = this.setTimer(() => {
+            const reject = reason => {
               if (done) return;
-              this.warn("语音响应超时，已切回视觉计时和可用的提示音。请检查中文语音支持。");
-              this.cancel();
-            },Math.min(14000,Math.max(2500,cue.length*450)));
-            this.log("speech-request",{cue});
-            try { this.synth.speak(utterance); }
-            catch { this.warn("语音不可用，请查看倒计时并检查浏览器中文语音支持。"); finish(); }
+              fail(reason); finish("unavailable"); media.pause();
+            };
+            this.job = { key, finish };
+            media.onplaying = () => {
+              if (done) return; sawPlaying = true;
+              const elapsed = this.now()-started;
+              this.log("media-playing",{key,cue:cues[key][0],elapsed});
+              this.onPlaying?.(key,elapsed);
+            };
+            media.onended = () => {
+              if (done) return;
+              const elapsed = this.now()-started, position = media.currentTime*1000;
+              if (!sawPlaying || elapsed < cues[key][1]*.65 || position < cues[key][1]-100) { reject("no-playback-progress"); return; }
+              // Decoder progress is evidence of playback, never proof of physical audibility.
+              this.log("media-ended",{key,elapsed,position}); this.recover(); finish("ended");
+            };
+            media.onerror = () => reject(`resource-${media.error?.code || "error"}`);
+            timeout = this.setTimer(() => reject("timeout"),5000+cues[key][1]);
+            this.log("media-request",{key,cue:cues[key][0]});
+            try {
+              media.src = this.sourceFor?.(key) || `audio/${key}.wav`;
+              media.load();
+              // This call must remain synchronous with Start / Continue / Retry clicks.
+              // Reuse the unlocked HTML media element, not a new element per interval.
+              const promise = media.play();
+              promise?.catch(error => reject(error.name || "play-rejected"));
+            } catch (error) { reject(error.name || "play-threw"); }
           });
         }
       }
@@ -403,14 +418,14 @@
         read(key) { const raw = this.storage.getItem(key); return raw === null ? null : JSON.parse(raw); }
         loadProgress() {
           try { return this.read(`${this.prefix}:progress`); }
-          catch { this.warn("无法读取训练进度（存储受限或内容损坏）。可开始新训练，但请先检查浏览器的网站存储权限。"); return null; }
+          catch { this.warn("进度读取失败，请检查网站存储。"); return null; }
         }
         saveProgress(value) {
           try {
             if (value) this.storage.setItem(`${this.prefix}:progress`, JSON.stringify(value));
             else this.storage.removeItem(`${this.prefix}:progress`);
             return true;
-          } catch { this.warn(value ? "当前进度未能保存。请允许网站存储并检查可用空间；关闭页面可能丢失本次进度。" : "未能清除当前进度，刷新后可能恢复旧进度。已完成的历史未删除；请检查网站存储权限。"); return false; }
+          } catch { this.warn(value ? "进度未保存，请检查网站存储和空间。" : "进度未清除，请检查网站存储。"); return false; }
         }
         history() {
           const records = [];
@@ -422,9 +437,9 @@
                 const r = this.read(key);
                 if (!validRecord(r) || key !== `${this.prefix}:done:${r.id}`) throw new Error("invalid record");
                 records.push(r);
-              } catch { this.warn("有无法读取的历史记录，已保留原数据。日历可能不完整，请勿清除网站数据。"); }
+              } catch { this.warn("部分历史读取失败，原数据已保留。"); }
             }
-          } catch { this.warn("无法读取打卡历史。请允许此浏览器的网站存储；当前日历不能确认完整记录。"); }
+          } catch { this.warn("历史读取失败，请检查网站存储。"); }
           return records;
         }
         complete(record) {
@@ -436,16 +451,16 @@
             // One atomic key per session: retries/tabs never append duplicate records.
             if (!existing) this.storage.setItem(key,JSON.stringify(record));
             return true;
-          } catch { this.warn("本次已完成，但打卡未保存。请允许网站存储或释放空间，再点「重试保存打卡」。"); return false; }
+          } catch { this.warn("打卡未保存，请检查存储后重试。"); return false; }
         }
       }
-      return { VERSION, PROGRAM, stages, plan, Engine, Store, SpeechChannel, localDate, validDate, monthCells, weeklyCount };
+      return { VERSION, PROGRAM, stages, plan, Engine, Store, MediaChannel, cues, cueFor, localDate, validDate, monthCells, weeklyCount };
     })();
   </script>
   <script id="rehab-app">
     (() => {
       "use strict";
-      const { stages, plan, Engine, Store, SpeechChannel, monthCells, weeklyCount } = RehabCore;
+      const { stages, plan, Engine, Store, MediaChannel, cues, cueFor, monthCells, weeklyCount } = RehabCore;
       const params = new URLSearchParams(location.search);
       const debugMs = Number(params.get("debugMs"));
       const isDebug = Number.isFinite(debugMs) && debugMs >= 20 && debugMs < 1000;
@@ -464,32 +479,47 @@
       const store = new Store(storage,prefix,message => showMessage("storageMessage",message));
       let history = store.history();
       let savedCompletion = false;
-      let audioContext = null, usesAudioClock = false, clock = () => performance.now();
-      let timer = null, generation = 0, wakeLock = null;
+      const clock = () => performance.now();
+      let timer = null, generation = 0, wakeLock = null, beepTimer = null;
       let nextCueIndex = -1, beepIndex = -1, lastSave = "", lastLane = "";
-      let pendingBeep = null, restored = false;
-      const nodes = new Set();
+      let pendingBeep = null, soundEnabled = true;
       const issues = new Map();
-      const soundStatus = () => issues.has("speech") || issues.has("audio") ? "声音功能受限，请查看下方提示并以页面为准" : "以提示音为计时零点，请保持前台与媒体音量";
       let month = new Date(); month = new Date(month.getFullYear(),month.getMonth(),1,12);
       const warn = (key,message) => { issues.set(key,message); showMessage("compatibilityMessage",[...issues.values()].join(" ")); };
-      const speaker = new SpeechChannel({
-        synth: window.speechSynthesis,
-        makeUtterance: window.SpeechSynthesisUtterance ? cue => {
-          const utterance = new SpeechSynthesisUtterance(cue);
-          utterance.lang = "zh-CN"; utterance.rate = 1.25; utterance.volume = 1;
-          const voice = speechSynthesis.getVoices().find(v => /^zh[-_]/i.test(v.lang));
-          if (voice) utterance.voice = voice;
-          return utterance;
-        } : null,
-        now: () => performance.now(), setTimer: (fn,ms) => setTimeout(fn,ms), clearTimer: id => clearTimeout(id),
-        warn: message => warn("speech",message), log
+      const soundMessage = message => {
+        showMessage("audioStatusText",message);
+        text("testSoundButton",message ? "重试声音" : "试听声音");
+      };
+      // Warm the tiny same-origin recordings once, so later cues need no network round trip.
+      // file:// uses the native media loader instead (fetch is often blocked for local files).
+      const mediaSources = new Map();
+      if (location.protocol !== "file:") for (const key of Object.keys(cues)) {
+        fetch(`audio/${key}.wav`).then(response => {
+          if (!response.ok) throw new Error("asset unavailable");
+          return response.blob();
+        }).then(blob => { mediaSources.set(key,URL.createObjectURL(blob)); log("asset-ready",{key,bytes:blob.size}); })
+          .catch(() => log("asset-preload-failed",{key}));
+      }
+      const speaker = new MediaChannel({
+        media: $("cueAudio"), sourceFor: key => mediaSources.get(key), now: clock,
+        setTimer: (fn,ms) => setTimeout(fn,ms), clearTimer: id => clearTimeout(id),
+        warn: soundMessage, recover: () => soundMessage(""),
+        onPlaying: (key,elapsed) => {
+          if (key === "beep" && elapsed > 150 && engine.state === "running") {
+            pause("声音延迟，已暂停。",true); speaker.failed = true;
+            soundMessage("声音延迟，请重试声音。");
+          }
+        }, log
       });
+      function playbackSession() {
+        // Optional on newer iOS; HTML media playback also works without AudioSession.
+        try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* Optional enhancement. */ }
+      }
       function clearAudio() {
         generation++; clearTimeout(timer); timer = null;
         speaker.cancel();
-        for (const node of nodes) { try { node.stop(); } catch { /* Already ended. */ } }
-        nodes.clear(); nextCueIndex = -1; beepIndex = -1; pendingBeep = null;
+        clearTimeout(beepTimer); beepTimer = null;
+        nextCueIndex = -1; beepIndex = -1; pendingBeep = null;
       }
       async function releaseWake() {
         const lock = wakeLock; wakeLock = null;
@@ -497,54 +527,41 @@
       }
       async function requestWake(token) {
         if (wakeLock) return;
-        if (!navigator.wakeLock) { warn("wake","此浏览器不能保持屏幕常亮，请手动延长自动锁屏时间。"); return; }
+        if (!navigator.wakeLock) { warn("wake","无法常亮，请延长锁屏时间。"); return; }
         try {
           const lock = await navigator.wakeLock.request("screen");
           if (token !== generation || !["cue","running"].includes(engine.state)) { await lock.release(); return; }
           wakeLock = lock;
           lock.addEventListener("release",() => { if (wakeLock === lock) wakeLock = null; });
-        } catch { warn("wake","未能保持屏幕常亮，请手动延长自动锁屏时间，并保持页面在前台。"); }
+        } catch { warn("wake","无法常亮，请延长锁屏时间。"); }
       }
-      async function unlock(token) {
-        try {
-          const Audio = window.AudioContext || window.webkitAudioContext;
-          if (!Audio) throw new Error("no audio");
-          if (!audioContext) audioContext = new Audio();
-          await Promise.race([audioContext.resume(),new Promise((_,reject) => setTimeout(() => reject(new Error("audio timeout")),1500))]);
-          if (token !== generation) return;
-          if (audioContext.state !== "running") throw new Error("audio suspended");
-          usesAudioClock = true; clock = () => audioContext.currentTime*1000;
-        } catch {
-          if (token !== generation) return;
-          usesAudioClock = false; clock = () => performance.now();
-          warn("audio","提示音不可用，当前使用视觉计时。请查看倒计时，或换支持 Web Audio 的浏览器后重试。");
+      function speak(key, retry=false) {
+        if (isDebug) { log("test-cue",{key,cue:cues[key][0]}); return Promise.resolve(); }
+        if (!soundEnabled) return Promise.resolve();
+        if (speaker.job && !retry) {
+          speaker.cancel(); speaker.failed = true;
+          soundMessage("声音中断，请重试声音。"); log("media-overrun",{key});
+          return Promise.resolve();
         }
-      }
-      function cueFor(item, full=false) {
-        if (item.kind === "prep") return "准备，30秒";
-        if (item.kind === "group-rest") return "第一组完成，组间休息一分钟";
-        if (item.kind === "rest") return "休息，5秒";
-        if (item.stage === 4) return `第${item.round}轮，${item.action}，30秒`;
-        const name = full ? `第${item.stage+1}项，${stages[item.stage].name}，${stages[item.stage].equipment}。` : "";
-        return `${name}第${item.group}组，第${item.rep}次，训练`;
-      }
-      function speak(cue) {
-        if (isDebug) { log("test-cue",{cue}); return Promise.resolve(); }
-        return speaker.speak(cue);
+        return speaker.play(key,retry);
       }
       function beep(at,index) {
-        if (!audioContext || audioContext.state !== "running") { log("visual-zero",{index}); return; }
-        const when = Math.max(audioContext.currentTime,at/1000);
-        try {
-          const oscillator = audioContext.createOscillator(), gain = audioContext.createGain();
-          oscillator.frequency.value = 880;
-          gain.gain.setValueAtTime(.0001,when); gain.gain.exponentialRampToValueAtTime(.34,when+.008);
-          gain.gain.exponentialRampToValueAtTime(.0001,when+(isDebug ? .035 : .16));
-          oscillator.connect(gain); gain.connect(audioContext.destination);
-          nodes.add(oscillator); oscillator.onended = () => { nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
-          oscillator.start(when); oscillator.stop(when+(isDebug ? .045 : .17));
-          log("beep-scheduled",{index,audioTime:when});
-        } catch { warn("audio","提示音播放失败，请查看倒计时，暂停后可重试。"); }
+        clearTimeout(beepTimer);
+        if (!soundEnabled || speaker.failed || isDebug) { log("visual-zero",{index}); return; }
+        const token = generation;
+        log("beep-scheduled",{index,zero:at});
+        beepTimer = setTimeout(() => {
+          beepTimer = null;
+          if (token !== generation || engine.state !== "running" || document.hidden) return;
+          // Do not emit a stale zero after a blocked event loop or page interruption.
+          if (clock()-at > 150) { pause("声音延迟，已暂停。",true); return; }
+          if (speaker.job) {
+            speaker.cancel(); speaker.failed = true;
+            soundMessage("语音中断，请重试声音。"); log("media-overrun",{index}); return;
+          }
+          speaker.play("beep");
+          log("beep-request",{index,zero:at,lateMs:clock()-at});
+        },Math.max(0,at-clock()));
       }
       function checkpoint(force=false) {
         const snap = engine.snapshot();
@@ -564,7 +581,7 @@
       function renderCalendar() {
         const today = new Date();
         text("monthTitle",`${month.getFullYear()} 年 ${month.getMonth()+1} 月`);
-        text("weeklySummary",`本周完成 ${weeklyCount(history,today)} 次 · 计划每周 3-4 次`);
+        text("weeklySummary",`本周 ${weeklyCount(history,today)} 次 · 每周 3-4 次`);
         const grid = $("calendarGrid"); grid.replaceChildren();
         for (const day of ["一","二","三","四","五","六","日"]) {
           const el = document.createElement("span"); el.className = "weekday"; el.textContent = day; el.setAttribute("aria-hidden","true"); grid.append(el);
@@ -579,7 +596,6 @@
           if (cell.today || cell.complete) { const label = document.createElement("small"); label.textContent = cell.today ? (cell.complete?"今天·完成":"今天") : "完成"; el.append(label); }
           grid.append(el);
         }
-        text("calendarNote",`${isTest?"以下仅为测试记录。":""}${history.length?"实心日期表示有完整训练；同日多次仅标记一天。":"还没有完整训练记录。完成全部五项后，这里会标记完成日期。"} 描边表示今天；每周按周一至周日统计，不设连续打卡目标。`);
       }
       function stagePoints() {
         const active = engine.state === "idle" ? 0 : engine.interval.stage;
@@ -612,39 +628,36 @@
       }
       function nextText() {
         const item = engine.interval, next = plan[engine.index+1];
-        if (!next) return "本段结束后：五项全部完成，自动打卡";
-        if (next.stage !== item.stage) return `本项结束后：等待你准备好，再开始第 ${next.stage+1} 项`;
-        if (item.kind === "prep") return "准备结束后：播报第一项，提示音响起开始训练";
-        if (next.stage===4) return `接着：第 ${next.round}/4 轮 · ${next.action} 30 秒（无休息）`;
-        if (next.kind === "group-rest") return "接着：组间休息 60 秒，可跳过";
-        if (next.kind === "rest") return "接着：重复间休息 5 秒";
-        return `接着：第 ${next.group}/2 组 · 第 ${next.rep}/6 次训练 15 秒`;
+        if (!next) return "接着：完成";
+        if (next.stage !== item.stage) return "接着：下一项就位";
+        if (item.kind === "prep") return "接着：大腿后伸";
+        if (next.stage===4) return `接着：${next.kind === "stretch" ? "拉伸" : "踮脚"}`;
+        return `接着：${next.kind === "group-rest" ? "组间休息" : next.kind === "rest" ? "休息" : "训练"}`;
       }
       function render() {
         const state = engine.state, item = engine.interval;
         $("idlePanel").hidden = state !== "idle"; $("runningPanel").hidden = state === "idle";
         stagePoints();
+        showMessage("runtimeMessage",state === "paused" ? engine.reason : "");
         if (state === "idle") return;
         text("exerciseName",`${item.stage+1}. ${stages[item.stage].name}`);
-        text("exerciseMeta",item.stage===4?"踮脚 30 秒 → 拉伸 30 秒 · 共 4 轮 · 中间不加休息":`${stages[item.stage].equipment} · 训练 15 秒 / 休息 5 秒 · 2 组 × 6 次 · 组间休息 60 秒`);
-        const phase = { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息",stretch:"拉伸" }[item.kind];
+        text("exerciseMeta",stages[item.stage].equipment);
+        $("exerciseMeta").hidden = !stages[item.stage].equipment;
+        const phase = item.stage===4 && item.kind==="work" ? "踮脚" : { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息",stretch:"拉伸" }[item.kind];
         document.querySelector(".scoreboard").dataset.state = state;
-        $("actionName").hidden = item.stage < 4;
-        text("phaseName",state==="ready"?"下一项就位":state==="paused"?"已暂停":state==="cue"?"听提示":state==="finished"?"训练完成":phase);
-        text("actionName",state==="finished"?"五项全部完成":item.stage===4?item.action:item.kind==="prep"?"30 秒初始准备":phase);
-        text("positionCopy",state==="finished"?"第 4/4 轮拉伸已完成":item.stage===4?`第 ${item.round}/4 轮 · ${item.kind==="stretch"?"拉伸":"踮脚"}`:item.kind==="prep"?"第一项尚未开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
+        $("positionCopy").hidden = ["ready","finished"].includes(state);
+        text("phaseName",state==="ready"?"下一项就位":state==="paused"?"已暂停":state==="cue"?"准备开始":state==="finished"?"训练完成":phase);
+        text("positionCopy",state==="finished"?"第 4/4 轮拉伸已完成":item.stage===4?`第 ${item.round}/4 轮`:item.kind==="prep"?"第一项尚未开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
         text("countdown",String(Math.max(0,Math.ceil(engine.remaining/unitMs-1e-6))));
         text("countdownUnit",state==="ready"?"秒 · 确认后开始":state==="finished"?(savedCompletion?"打卡已保存":"打卡尚未保存"):state==="cue"?"秒 · 提示音后计时":"秒");
-        text("nextCue",state==="finished"?(savedCompletion?"记录保存在本浏览器的训练日历中":"请勿关闭页面，可重试保存打卡"):state==="ready"?"不会自动开始，也不另加倒计时准备":nextText());
+        $("nextCue").hidden = ["finished","ready","paused"].includes(state);
+        text("nextCue",nextText());
         $("continueButton").hidden = !["paused","ready"].includes(state);
-        text("continueButton",state==="ready"?"准备好了，开始下一项":restored?"继续已保存的训练":"继续训练");
+        text("continueButton",state==="ready"?"准备好了，开始下一项":"继续训练");
         $("pauseButton").hidden = !["running","cue"].includes(state);
         $("skipPrepButton").hidden = state!=="running" || item.kind!=="prep";
         $("skipRestButton").hidden = state!=="running" || item.kind!=="group-rest";
         $("retrySaveButton").hidden = state!=="finished" || savedCompletion;
-        $("readyNote").hidden = !["ready","paused"].includes(state);
-        text("readyNote",state==="ready"?"上一项已完成。请调整姿势和器材，准备好后再点击下方按钮。":engine.reason || "本段剩余时间已保留，点击继续后从提示音开始计时。");
-        text("audioStatusText",isDebug?"测试模式：视觉计时与短提示音，不播语音":state==="paused" || state==="ready"?"计时与提示音已停，等待手动继续":soundStatus());
         lanes();
       }
       function pause(reason="", conservative=false) {
@@ -652,14 +665,14 @@
         engine.reason = reason; clearAudio(); releaseWake(); checkpoint(true); render();
         log("paused",{index:engine.index,remaining:engine.remaining,reason});
       }
-      async function enterCue(resuming=false) {
+      async function enterCue(resuming=false, gesture=false) {
         clearAudio(); const token = generation;
-        render(); checkpoint(true);
-        await unlock(token); if (token!==generation || engine.state!=="cue") return;
-        requestWake(token);
         const item = engine.interval;
-        const cue = resuming ? `${cueFor(item,true)}，继续剩余${Math.ceil(engine.remaining/unitMs)}秒` : cueFor(item,true);
-        await speak(cue);
+        if (gesture) playbackSession();
+        // No await or asynchronous initialization before the first media.play in a click.
+        const playing = speak(cueFor(item,!resuming),gesture);
+        render(); checkpoint(true); requestWake(token);
+        await playing;
         if (token!==generation || engine.state!=="cue") return;
         const zero = clock()+40;
         beep(zero,item.index); engine.arm(zero); checkpoint(true); render();
@@ -669,22 +682,20 @@
       function pump() {
         clearTimeout(timer);
         if (engine.state!=="running") return;
-        if (usesAudioClock && audioContext.state!=="running") { pause("音频被浏览器暂停，请回到页面后点击继续。",true); return; }
         const now = clock();
         const result = engine.tick(now,new Date());
         if (result === "late") { clearAudio(); releaseWake(); checkpoint(true); render(); log("late-paused"); return; }
         if (result === "finished") {
-          clearAudio(); releaseWake(); finishSave(); speak("五项训练全部完成，训练结束"); log("session-finished",{id:engine.id,date:engine.completion.date,saved:savedCompletion}); return;
+          clearAudio(); releaseWake(); finishSave(); speak("complete"); log("session-finished",{id:engine.id,date:engine.completion.date,saved:savedCompletion}); return;
         }
         if (result === "ready") {
           clearAudio(); releaseWake(); checkpoint(true); render();
-          speak(`第${engine.interval.stage}项完成。下一项，${stages[engine.interval.stage].name}。请调整姿势和器材，准备好后点击开始下一项。`);
+          speak("next");
           log("stage-ready",{stage:engine.interval.stage}); return;
         }
         if (result === "cue") { enterCue(); return; }
         if (result === "interval") {
-          if (speaker.job) { speaker.cancel(); warn("cue","部分语音未能在提示音前结束，已停止以免重叠。请以提示音和页面为准。"); }
-          if (beepIndex !== engine.index) beep(now,engine.index);
+          if (beepIndex !== engine.index) beep(engine.deadline-engine.interval.seconds*unitMs,engine.index);
           log("interval-start",{index:engine.index,kind:engine.interval.kind,stage:engine.interval.stage,zero:engine.deadline-engine.interval.seconds*unitMs});
           nextCueIndex = -1; pendingBeep = null;
         }
@@ -692,11 +703,10 @@
         const automatic = next && next.stage===engine.interval.stage && engine.interval.kind!=="prep";
         if (automatic) {
           const cue = cueFor(next);
-          const lead = isDebug?0:(speaker.measurements.get(cue) || cue.length*210+450)+160;
+          const lead = isDebug?0:cues[cue][1]+650;
           if (engine.remaining<=lead && nextCueIndex!==next.index) { nextCueIndex=next.index; speak(cue); }
           // Only arm the immediately upcoming beep close to its boundary.
           if (engine.remaining<=Math.min(350,unitMs) && beepIndex!==next.index) {
-            if (speaker.job) { speaker.cancel(); warn("cue","部分语音未能在提示音前结束，已停止以免重叠。请以提示音和页面为准。"); }
             beepIndex=next.index; pendingBeep=engine.deadline; beep(engine.deadline,next.index);
           }
         }
@@ -708,22 +718,34 @@
       $("startButton").addEventListener("click",() => {
         const id = window.crypto?.randomUUID?.() || `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         if (!engine.start(id)) return;
-        showMessage("runtimeMessage",""); savedCompletion=false; restored=false;
-        $("runningPanel").classList.add("reveal"); enterCue();
+        showMessage("runtimeMessage",""); savedCompletion=false;
+        $("runningPanel").classList.add("reveal"); enterCue(false,true);
       });
       $("continueButton").addEventListener("click",() => {
         const resuming = engine.state==="paused";
         if (!engine.continue()) return;
-        restored=false; $("resetConfirm").hidden=true; enterCue(resuming);
+        $("resetConfirm").hidden=true; enterCue(resuming,true);
       });
       $("pauseButton").addEventListener("click",() => pause());
+      function testSound() {
+        pause(); speaker.cancel(); clearTimeout(beepTimer); beepTimer = null;
+        soundEnabled = true; $("soundButton").setAttribute("aria-pressed","true"); text("soundButton","声音：开");
+        playbackSession(); speaker.play("test",true);
+      }
+      $("testSoundButton").addEventListener("click",testSound);
+      $("soundButton").addEventListener("click",() => {
+        if (!soundEnabled) { testSound(); return; }
+        soundEnabled = false; speaker.cancel(); clearTimeout(beepTimer); beepTimer = null;
+        $("soundButton").setAttribute("aria-pressed","false"); text("soundButton","声音：关");
+        soundMessage(""); log("sound-off");
+      });
       for (const [id,kind] of [["skipPrepButton","prep"],["skipRestButton","group-rest"]]) {
         $(id).addEventListener("click",() => {
-          if (engine.skip(kind,clock())) { log("rest-skipped",{kind,index:engine.index}); enterCue(); }
+          if (engine.skip(kind,clock())) { log("rest-skipped",{kind,index:engine.index}); enterCue(false,true); }
           else {
             clearAudio();
             if (engine.state==="cue") enterCue();
-            else { if (engine.state==="running") pause("边界已变化，请确认后继续。",true); checkpoint(true); render(); }
+            else { if (engine.state==="running") pause("阶段已变化，请确认后继续。",true); checkpoint(true); render(); }
           }
         });
       }
@@ -733,7 +755,7 @@
       $("cancelResetButton").addEventListener("click",() => { $("resetConfirm").hidden=true; $("resetButton").focus(); });
       $("confirmResetButton").addEventListener("click",() => {
         clearAudio(); releaseWake(); engine.reset(); store.saveProgress(null); lastSave="";
-        savedCompletion=false; restored=false; $("resetConfirm").hidden=true; $("runningPanel").classList.remove("reveal");
+        savedCompletion=false; $("resetConfirm").hidden=true; $("runningPanel").classList.remove("reveal");
         render(); log("reset"); $("startButton").focus();
       });
       $("retrySaveButton").addEventListener("click",() => { showMessage("storageMessage",""); finishSave(); });
@@ -741,10 +763,10 @@
         month = new Date(month.getFullYear(),month.getMonth()+offset,1,12); renderCalendar();
       });
       document.addEventListener("visibilitychange",() => {
-        if (document.hidden) { pause("页面离开前台，已暂停。回到页面后请手动继续。",true); clearAudio(); releaseWake(); }
+        if (document.hidden) { pause("离开页面，已暂停。",true); clearAudio(); releaseWake(); }
         else { renderCalendar(); render(); }
       });
-      window.addEventListener("pagehide",() => { pause("页面已关闭或导航离开，进度已暂停。",true); clearAudio(); releaseWake(); });
+      window.addEventListener("pagehide",() => { pause("离开页面，已暂停。",true); clearAudio(); releaseWake(); });
       window.addEventListener("storage",e => { if (e.key?.startsWith(`${prefix}:done:`)) { history=store.history(); renderCalendar(); } });
       stages.forEach((stage,i) => {
         const point = document.createElement("li"); point.className="stage-point";
@@ -752,12 +774,11 @@
         point.querySelector(".stage-label").textContent=stage.short; $("stageProgress").append(point);
         const line = document.createElement("li"); line.textContent=`${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"15 秒训练 / 5 秒重复间休息，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮，无额外休息。"}`; $("routineList").append(line);
       });
-      if (isTest) { $("debugBadge").hidden=false; text("debugBadge",isDebug?`测试计时：1 秒 = ${unitMs} 毫秒。无语音，仅存测试进度和测试打卡，不计入正式历史。`:"实时测试：标准时长与中文语音，仅存测试进度和打卡，不计入正式历史。"); }
+      if (isTest) { $("debugBadge").hidden=false; text("debugBadge",isDebug?`隔离测试 · ${unitMs} ms/秒 · 无声音`:"隔离测试 · 真实秒长与声音"); }
       const snapshot = store.loadProgress();
       if (snapshot !== null) {
-        if (!engine.restore(snapshot)) showMessage("storageMessage","保存的进度格式损坏或版本不兼容，未恢复。历史打卡保持不变，可开始新训练。");
+        if (!engine.restore(snapshot)) showMessage("storageMessage","进度无法恢复，历史保留。");
         else {
-          restored=true;
           const existing = history.find(record => record.id===engine.id);
           if (existing) {
             engine.index=plan.length-1; engine.remaining=0; engine.state="finished"; engine.completion=existing;
@@ -770,7 +791,7 @@
       window.__rehabTimer = {
         config: { debug:isDebug, test:isTest, unitMs, prefix, totalSeconds:plan.reduce((n,p)=>n+p.seconds,0) }, events,
         getPlan: () => plan.map(p=>({...p})),
-        getState: () => ({ ...engine.snapshot(), runState:engine.state, savedCompletion, audioState:audioContext?.state || "not-created", liveUtteranceCount:speaker.live.size, pendingBeep, historyCount:history.length })
+        getState: () => ({ ...engine.snapshot(), runState:engine.state, savedCompletion, soundEnabled, mediaState:speaker.failed?"unavailable":$("cueAudio").paused?"paused":"playing", mediaJob:speaker.job?.key || null, pendingBeep, historyCount:history.length })
       };
     })();
   </script>

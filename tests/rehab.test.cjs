@@ -10,7 +10,7 @@ const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m
 for (const script of scripts) new vm.Script(script); // Parse the shipped UI as well as the domain script.
 const context = vm.createContext({ Date });
 vm.runInContext(scripts[0], context);
-const { Engine, Store, SpeechChannel, plan, stages, localDate, validDate, monthCells, weeklyCount } = context.RehabCore;
+const { Engine, Store, MediaChannel, cues, cueFor, plan, stages, localDate, validDate, monthCells, weeklyCount } = context.RehabCore;
 const plain = value => JSON.parse(JSON.stringify(value));
 const ID = 'synthetic-session-0001';
 const FINISH = new Date(2026, 8, 7, 0, 1);
@@ -276,43 +276,167 @@ test('公历闰年/月首周一偏移/跨年/今天与完成并存/周一至周�
   assert.equal(today.complete,true);
   assert.equal(monthCells(2026,12,[],new Date()).find(Boolean).date,'2027-01-01');
 });
-function speechFixture(supported=true) {
-  let now=0, next=0; const timers=new Map(), warnings=[], events=[], spoken=[];
-  const synth={ speak(u) { spoken.push(u); }, cancel() { for (const u of spoken) u.onerror?.({error:'canceled'}); } };
-  const channel = new SpeechChannel({ synth:supported?synth:null, makeUtterance:text=>({text}), now:()=>now,
+function mediaFixture(supported=true) {
+  let now=0, next=0, recovered=0; const timers=new Map(), warnings=[], events=[], requests=[];
+  const media={currentTime:0, load() { this.currentTime=0; }, pause() {}, play() {
+    requests.push({src:this.src, ended:this.onended, playing:this.onplaying, error:this.onerror}); return Promise.resolve();
+  }};
+  const channel = new MediaChannel({media:supported?media:null, now:()=>now,
     setTimer(fn,ms) { const id=++next; timers.set(id,{fn,at:now+ms}); return id; }, clearTimer:id=>timers.delete(id),
-    warn:m=>warnings.push(m), log:(type,detail)=>events.push({type,...detail}) });
-  return { channel, synth, spoken, warnings, events, timers, advance(ms) { now+=ms; for(const [id,t] of [...timers]) if(t.at<=now) {timers.delete(id);t.fn();} } };
+    warn:m=>warnings.push(m), recover:()=>recovered++, log:(type,detail)=>events.push({type,...detail})});
+  return {channel,media,requests,warnings,events,timers,get recovered(){return recovered;},
+    advance(ms) { now+=ms; for(const [id,t] of [...timers]) if(t.at<=now) {timers.delete(id);t.fn();} },
+    end(key) { media.onplaying(); this.advance(cues[key][1]); media.currentTime=cues[key][1]/1000; media.onended(); }
+  };
 }
-test('真实语音生命周期：保持对象引用，start/end后交接，不提前完成', async () => {
-  const f=speechFixture(); let resolved=false; const promise=f.channel.speak('准备，30秒').then(()=>resolved=true);
-  assert.equal(f.channel.live.size,1); assert.equal(resolved,false);
-  f.spoken[0].onstart(); f.advance(1200); assert.equal(resolved,false);
-  f.spoken[0].onend(); await promise;
-  assert.equal(f.channel.live.size,0); assert.equal(f.channel.measurements.get('准备，30秒'),1200);
-  assert.deepEqual(f.events.map(e=>e.type),['speech-request','speech-start','speech-end']); assert.equal(f.warnings.length,0);
+test('所有播报映射短且不复述组次/剩余秒；恢复休息仍仅休息', () => {
+  for (const item of plan) for (const full of [true,false]) {
+    const key=cueFor(item,full); assert.ok(cues[key]); assert.ok(cues[key][0].length<=4);
+    assert.doesNotMatch(cues[key][0],/[0-9秒组次轮]/);
+    if (['rest','group-rest'].includes(item.kind)) assert.equal(cues[key][0],'休息');
+  }
+  assert.equal(cues[cueFor(plan[1],true)][0],'大腿后伸');
+  assert.equal(cues[cueFor(plan[5])][0],'训练继续');
+  assert.equal(cues[cueFor(plan[93])][0],'踮脚');
+  assert.equal(cues[cueFor(plan[94])][0],'拉伸');
 });
-test('复现本机语音即时end却无start：发出降级警告而不是假装播报成功', async () => {
-  const f=speechFixture(); const promise=f.channel.speak('准备，30秒'); f.spoken[0].onend(); await promise;
-  assert.equal(f.warnings.length,1); assert.match(f.warnings[0],/未正常启动/);
-  assert.equal(f.channel.measurements.size,0); assert.equal(f.events.at(-1).type,'speech-unavailable');
+test('随站 PCM 语音是真实非静音资源，时长与排程清单逐一匹配', () => {
+  for(const [key,[,duration]] of Object.entries(cues)) {
+    const wav=fs.readFileSync(new URL(`../audio/${key}.wav`, `file://${__filename}`));
+    assert.equal(wav.toString('ascii',0,4),'RIFF'); assert.equal(wav.toString('ascii',8,12),'WAVE');
+    assert.equal(wav.readUInt16LE(20),1); assert.equal(wav.readUInt16LE(22),1); assert.equal(wav.readUInt16LE(34),16);
+    const data=wav.subarray(44), rate=wav.readUInt32LE(24);
+    assert.equal(Math.round(data.length/2/rate*1000),duration);
+    let power=0; for(let i=0;i<data.length;i+=2) power+=(data.readInt16LE(i)/32768)**2;
+    assert.ok(Math.sqrt(power/(data.length/2))>.015,`${key} must contain a real signal`);
+    assert.ok(duration<1200,`${key} fits well inside a 5 second rest`);
+  }
 });
-test('暂停/跳过/重置时取消语音，旧end/error/start不触发新任务或警告', async () => {
-  const f=speechFixture(); const a=f.channel.speak('第一组训练'); const old=f.spoken[0]; old.onstart();
-  f.channel.cancel(); await a; const b=f.channel.speak('第二组训练');
-  old.onend(); old.onstart(); old.onerror({error:'interrupted'});
-  assert.equal(f.channel.live.size,1); assert.equal(f.warnings.length,0);
-  const latest=f.spoken[1]; latest.onstart(); f.advance(900); latest.onend(); await b;
-  assert.equal(f.events.filter(e=>e.type==='speech-end').length,1);
-  assert.equal(f.events.at(-1).cue,'第二组训练'); assert.equal(f.channel.live.size,0);
+test('媒体播放立即调用 play，不先 await；完成须 playing + 时长 + 播放位置', async () => {
+  const f=mediaFixture(); let resolved=false;
+  const promise=f.channel.play('prepare').then(()=>resolved=true);
+  assert.equal(f.requests.length,1); assert.equal(f.requests[0].src,'audio/prepare.wav');
+  assert.equal(resolved,false); f.end('prepare'); await promise;
+  assert.equal(f.channel.job,null); assert.equal(f.recovered,1); assert.equal(f.warnings.length,0);
+  assert.deepEqual(f.events.map(e=>e.type),['media-request','media-playing','media-ended']);
 });
-test('语音缺失、播放错误、永久无回调均有界降级且没有遗留队列', async () => {
-  const absent=speechFixture(false); await absent.channel.speak('准备'); assert.equal(absent.warnings.length,1);
-  const error=speechFixture(); const failed=error.channel.speak('准备'); error.spoken[0].onerror({error:'synthesis-failed'}); await failed;
-  assert.equal(error.warnings.length,1); assert.equal(error.channel.live.size,0);
-  const stuck=speechFixture(); const waiting=stuck.channel.speak('准备，30秒'); stuck.advance(15000); await waiting;
-  assert.equal(stuck.channel.job,null); assert.equal(stuck.channel.live.size,0); assert.equal(stuck.timers.size,0);
-  assert.match(stuck.warnings[0],/超时/);
+test('即时假结束/只有play promise成功不是播音成功；无进度如实报错', async () => {
+  for(const sawPlaying of [true,false]) {
+    const f=mediaFixture(); const promise=f.channel.play('prepare');
+    if(sawPlaying) f.media.onplaying();
+    f.media.onended(); assert.equal(await promise,'unavailable');
+    assert.equal(f.channel.failed,true); assert.equal(f.recovered,0); assert.equal(f.warnings.length,1);
+  }
+});
+test('取消/重复点击/抢音仅保留最新任务；陈旧事件和拒绝不会污染恢复', async () => {
+  const f=mediaFixture(); const a=f.channel.play('prepare'); const old=f.requests[0];
+  const b=f.channel.play('continue'); assert.equal(await a,'canceled');
+  old.ended(); old.playing(); old.error();
+  assert.equal(f.channel.job.key,'continue'); assert.equal(f.warnings.length,0);
+  f.end('continue'); assert.equal(await b,'ended'); assert.equal(f.timers.size,0);
+  const c=f.channel.play('rest'); f.channel.cancel(); assert.equal(await c,'canceled');
+  assert.equal(f.channel.job,null); assert.equal(f.timers.size,0);
+});
+test('媒体不支持/资源错误/play拒绝/超时均有界降级；只在显式操作重试', async () => {
+  const absent=mediaFixture(false); assert.equal(await absent.channel.play('prepare'),'unavailable');
+  for(const reason of ['resource','reject','throw','timeout']) {
+    const f=mediaFixture();
+    if(reason==='reject') f.media.play=()=>Promise.reject({name:'NotAllowedError'});
+    if(reason==='throw') f.media.play=()=>{throw new Error('unsupported');};
+    const promise=f.channel.play('prepare');
+    if(reason==='resource') f.media.onerror();
+    if(reason==='timeout') f.advance(7000);
+    assert.equal(await promise,'unavailable'); assert.equal(f.channel.job,null); assert.equal(f.timers.size,0);
+    const count=f.requests.length; assert.equal(await f.channel.play('rest'),'unavailable'); assert.equal(f.requests.length,count);
+    f.media.play=()=>Promise.resolve();
+    const retry=f.channel.play('test',true); f.end('test'); assert.equal(await retry,'ended');
+    assert.equal(f.channel.failed,false); assert.equal(f.recovered,1);
+  }
+});
+test('红框内容连同容器删除，详情仍可查看，声音恢复操作可访问', () => {
+  for(const removed of ['session-formula','idle-copy','idleTitle','calendarNote','readyNote','每项就位','不设连续打卡目标','部分语音未能在提示音前结束','声音功能受限']) assert.ok(!html.includes(removed),removed);
+  assert.match(html,/<summary>动作详情<\/summary>/);
+  assert.match(html,/id="soundButton"[^>]*aria-pressed="true"/);
+  assert.match(html,/id="testSoundButton"/);
+  assert.doesNotMatch(html,/speechSynthesis|AudioContext|getUserMedia|microphone|MediaRecorder/);
+});
+
+const appFixture = require('./app-fixture.cjs');
+test('真实页面控制器：首次点击直接播准备，真实30秒后动作，再15秒工作/5秒短休', async () => {
+  const f=appFixture(); await f.click('startButton');
+  assert.deepEqual(f.requests[0],{key:'prepare',at:0,gesture:true});
+  await f.advance(600); assert.equal(f.state().index,0); assert.equal(f.state().runState,'running');
+  await f.advance(29400); assert.equal(f.state().index,0);
+  await f.advance(1700); assert.equal(f.state().index,1);
+  const work=f.events().find(e=>e.type==='interval-start'&&e.index===1);
+  const prep=f.events().find(e=>e.type==='interval-start'&&e.index===0);
+  assert.ok(work.zero-prep.zero>=30000 && work.zero-prep.zero<31500);
+  await f.advance(15000); assert.equal(f.state().index,2);
+  await f.advance(5000); assert.equal(f.state().index,3);
+  const starts=f.events().filter(e=>e.type==='interval-start');
+  assert.equal(starts[2].zero-starts[1].zero,15000); assert.equal(starts[3].zero-starts[2].zero,5000);
+  assert.equal(f.requests.filter(r=>r.key==='rest').length,1);
+  assert.equal(f.requests.filter(r=>r.key==='continue').length,1);
+  assert.equal(f.elements.get('audioStatusText').textContent,'');
+});
+test('真实页面控制器：声音关不停视觉计时，重开/试听先暂停，显式继续不丢剩余时间', async () => {
+  const f=appFixture(); await f.click('startButton');await f.advance(3000);
+  await f.click('soundButton'); const count=f.requests.length;
+  await f.advance(29000); assert.equal(f.requests.length,count);assert.equal(f.state().index,1);
+  await f.click('soundButton');assert.equal(f.state().runState,'paused');
+  const remaining=f.state().remaining;assert.equal(f.requests.at(-1).key,'test');assert.equal(f.requests.at(-1).gesture,true);
+  await f.advance(5000);assert.equal(f.state().remaining,remaining);
+  await f.click('continueButton');assert.equal(f.requests.at(-1).key,'continue');assert.equal(f.requests.at(-1).gesture,true);
+  await f.advance(1000);assert.equal(f.state().runState,'running');assert.ok(f.state().remaining<=remaining);
+  await f.visibility(true);const paused=f.state().remaining;await f.advance(50000);await f.visibility(false);
+  assert.equal(f.state().runState,'paused');assert.equal(f.state().remaining,paused);
+});
+test('真实页面控制器：失败仅短状态，自动段不重试堆积；恢复点击真正再次播放', async () => {
+  const f=appFixture({rejectPlay:true});await f.click('startButton');await f.advance(50000);
+  assert.equal(f.state().runState,'running');assert.equal(f.requests.length,1);
+  assert.equal(f.elements.get('testSoundButton').textContent,'重试声音');
+  assert.match(f.elements.get('audioStatusText').textContent,/未播放/);
+  f.fail(false);await f.click('testSoundButton');assert.equal(f.state().runState,'paused');
+  await f.advance(1500);assert.equal(f.elements.get('audioStatusText').textContent,'');
+  await f.click('continueButton');await f.advance(1000);assert.equal(f.state().runState,'running');
+});
+test('真实页面控制器：语音加载超界不会与提示音重叠，也不会被提示音成功清掉错误', async () => {
+  const f=appFixture();await f.click('startButton');await f.advance(32000);
+  f.stall(true);await f.advance(15000);
+  assert.equal(f.state().mediaState,'unavailable');assert.equal(f.state().mediaJob,null);
+  assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
+  const count=f.requests.length;await f.advance(5000);assert.equal(f.requests.length,count);
+  assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
+});
+test('真实页面控制器：提示音解码启动过晚则暂停，不冒充准时零点', async () => {
+  const f=appFixture({beepDelay:300});await f.click('startButton');await f.advance(2000);
+  assert.equal(f.state().runState,'paused');assert.equal(f.state().mediaState,'unavailable');
+  assert.match(f.elements.get('audioStatusText').textContent,/延迟/);
+});
+test('实际页面完整标准秒长调度：五项短播报、四次手动边界、组休跳过和完整打卡', async () => {
+  const f=appFixture();await f.click('startButton');let waits=0,skip=false;
+  for(let i=0;i<1600 && f.state().runState!=='finished';i++) {
+    if(f.state().runState==='ready') {const before=f.state().index;await f.advance(3000);assert.equal(f.state().index,before);waits++;await f.click('continueButton');}
+    if(!skip && f.state().index===12 && f.state().runState==='running') {await f.click('skipRestButton');skip=true;assert.equal(f.state().index,13);}
+    await f.advance(1000);
+  }
+  assert.equal(waits,4);assert.equal(skip,true);assert.equal(f.state().runState,'finished');assert.equal(f.state().historyCount,1);
+  const final=f.events().filter(e=>e.type==='interval-start'&&e.stage===4);
+  assert.equal(final.length,8);for(let i=1;i<8;i++)assert.equal(final[i].zero-final[i-1].zero,30000);
+  assert.equal(f.requests.filter(r=>r.key==='next').length,4);
+  for(const key of ['leg-raise','hip-adduction','ankle-inversion'])assert.equal(f.requests.filter(r=>r.key===key).length,1);
+  const restored=appFixture({storage:f.storage});assert.equal(restored.state().historyCount,1);
+});
+test('真实页面控制器：暂停语音期后迟到完成不启动，刷新仍需手动继续且历史不变', async () => {
+  const storage=new Map([['rehab-timer:v1:sentinel','synthetic-do-not-touch']]);
+  const f=appFixture({storage});await f.click('startButton');const old=f.media.onended;
+  await f.click('pauseButton');old();await f.advance(10000);assert.equal(f.state().runState,'paused');
+  const restored=appFixture({storage});assert.equal(restored.state().runState,'paused');assert.equal(restored.requests.length,0);
+  await restored.click('continueButton');await restored.advance(2000);
+  await restored.click('resetButton');await restored.click('confirmResetButton');
+  assert.equal(restored.state().runState,'idle');assert.equal(restored.state().historyCount,0);
+  assert.equal(restored.elements.get('runtimeMessage').textContent,'');
+  assert.equal(storage.get('rehab-timer:v1:sentinel'),'synthetic-do-not-touch');
 });
 
 test('时区改变与夏令时附近日期不由UTC切片计算', () => {
