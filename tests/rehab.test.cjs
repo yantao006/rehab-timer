@@ -408,6 +408,25 @@ test('真实页面控制器：语音加载超界不会与提示音重叠，也�
   const count=f.requests.length;await f.advance(5000);assert.equal(f.requests.length,count);
   assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
 });
+test('真实页面控制器：提示音解码启动过晚则暂停，不冒充准时零点', async () => {
+  const f=appFixture({beepDelay:300});await f.click('startButton');await f.advance(2000);
+  assert.equal(f.state().runState,'paused');assert.equal(f.state().mediaState,'unavailable');
+  assert.match(f.elements.get('audioStatusText').textContent,/延迟/);
+});
+test('实际页面完整标准秒长调度：五项短播报、四次手动边界、组休跳过和完整打卡', async () => {
+  const f=appFixture();await f.click('startButton');let waits=0,skip=false;
+  for(let i=0;i<1600 && f.state().runState!=='finished';i++) {
+    if(f.state().runState==='ready') {const before=f.state().index;await f.advance(3000);assert.equal(f.state().index,before);waits++;await f.click('continueButton');}
+    if(!skip && f.state().index===12 && f.state().runState==='running') {await f.click('skipRestButton');skip=true;assert.equal(f.state().index,13);}
+    await f.advance(1000);
+  }
+  assert.equal(waits,4);assert.equal(skip,true);assert.equal(f.state().runState,'finished');assert.equal(f.state().historyCount,1);
+  const final=f.events().filter(e=>e.type==='interval-start'&&e.stage===4);
+  assert.equal(final.length,8);for(let i=1;i<8;i++)assert.equal(final[i].zero-final[i-1].zero,30000);
+  assert.equal(f.requests.filter(r=>r.key==='next').length,4);
+  for(const key of ['leg-raise','hip-adduction','ankle-inversion'])assert.equal(f.requests.filter(r=>r.key===key).length,1);
+  const restored=appFixture({storage:f.storage});assert.equal(restored.state().historyCount,1);
+});
 test('真实页面控制器：暂停语音期后迟到完成不启动，刷新仍需手动继续且历史不变', async () => {
   const storage=new Map([['rehab-timer:v1:sentinel','synthetic-do-not-touch']]);
   const f=appFixture({storage});await f.click('startButton');const old=f.media.onended;

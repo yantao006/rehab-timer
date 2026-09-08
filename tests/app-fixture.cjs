@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const html = fs.readFileSync(require('node:path').join(__dirname,'../index.html'),'utf8');
 const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-module.exports = function appFixture({rejectPlay=false, stuck=false, storage=new Map()}={}) {
+module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0, storage=new Map()}={}) {
   let now=0, serial=0, gesture=false;
   const timers=new Map(), elements=new Map(), documentEvents={}, requests=[];
   const setTimer=(fn,ms=0)=>{const id=++serial;timers.set(id,{fn,at:now+ms});return id;};
@@ -30,8 +30,9 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, storage=new
     media.paused=false;
     if(!stuck) {
       const playing=media.onplaying, ended=media.onended;
-      mediaTimers.push(setTimer(()=>playing?.(),0));
-      mediaTimers.push(setTimer(()=>{media.currentTime=context.RehabCore.cues[key][1]/1000;media.paused=true;ended?.();},context.RehabCore.cues[key][1]));
+      const delay=key==='beep'?beepDelay:0;
+      mediaTimers.push(setTimer(()=>playing?.(),delay));
+      mediaTimers.push(setTimer(()=>{media.currentTime=context.RehabCore.cues[key][1]/1000;media.paused=true;ended?.();},delay+context.RehabCore.cues[key][1]));
     }
     return Promise.resolve();
   };

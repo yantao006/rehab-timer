@@ -40,8 +40,8 @@
       padding: max(24px, env(safe-area-inset-top)) 0 max(22px, env(safe-area-inset-bottom));
     }
     .site-header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 0 4px 22px; border-bottom: 1px solid var(--line); }
-    .site-header h1 { max-width: 12ch; font: 700 clamp(2rem,5vw,3.45rem)/.98 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
-    main { padding: 28px 0 36px; }
+    .site-header h1 { max-width: 100%; font: 700 clamp(2rem,5vw,3.45rem)/.98 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
+    main { padding: 20px 0 24px; }
     .stage-progress { list-style: none; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; margin: 0 0 26px; padding: 0; }
     .stage-point { min-width: 0; display: grid; justify-items: center; gap: 7px; text-align: center; color: var(--muted); }
     .stage-number { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #659da0; border-radius: 50%; background: var(--foam); font-weight: 800; font-size: 1.2rem; }
@@ -67,7 +67,6 @@
     .running-panel.reveal .scoreboard { animation: scoreboard-in 500ms cubic-bezier(.16,1,.3,1) both; }
     .interval-state { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; padding: 32px; background: var(--pool-dark); }
     .phase-name { color: var(--water); font: 700 2.7rem/1.15 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; }
-    .action-name { font-size: 1.1rem; font-weight: 700; line-height: 1.6; margin-top: 14px; }
     .position-copy { color: #d9eeee; font-size: 1.1rem; font-weight: 700; line-height: 1.5; }
     .clock-field { display: grid; align-content: center; justify-items: center; min-width: 0; padding: 36px 24px; text-align: center; }
     .countdown { font: 800 6rem/.9 "Avenir Next Condensed", "DIN Condensed", "Arial Narrow", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
@@ -132,8 +131,11 @@
       .start-inner { gap: 14px; }
       .start-label { font-size: 2.4rem; }
       .scoreboard { grid-template-columns: 1fr; min-height: 0; }
-      .interval-state { padding: 22px; gap: 18px; }
-      .phase-name { font-size: 2.4rem; }
+      .interval-state { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; padding: 18px; gap: 10px; }
+      .phase-name { font-size: 2rem; }
+      .position-copy { max-width: 9em; text-align: right; font-size: .95rem; }
+      .scoreboard[data-state="ready"] .interval-state { display: block; }
+      .scoreboard[data-state="ready"] .position-copy { display: none; }
       .clock-field { padding: 26px 22px; }
       .countdown { font-size: 5.5rem; }
       .exercise-heading { font-size: 1.15rem; }
@@ -166,7 +168,7 @@
         <div><h2 class="exercise-heading" id="exerciseName"></h2><p class="exercise-meta" id="exerciseMeta"></p></div>
         <div class="scoreboard">
           <div class="interval-state">
-            <div><p class="phase-name" id="phaseName"></p><p class="action-name" id="actionName"></p></div>
+            <p class="phase-name" id="phaseName"></p>
             <p class="position-copy" id="positionCopy"></p>
           </div>
           <div class="clock-field">
@@ -225,7 +227,7 @@
         { name: "左侧直抬腿", equipment: "1 kg", short: "直抬腿" },
         { name: "左髋内收抗阻静力训练", equipment: "弹力带 15 磅", short: "髋内收" },
         { name: "左踝内翻训练", equipment: "弹力带 15 磅", short: "踝内翻" },
-        { name: "左小腿踮脚静力训练 → 左小腿拉伸", equipment: "", short: "踮脚 / 拉伸" }
+        { name: "左小腿踮脚静力训练 → 左小腿拉伸", equipment: "", short: "踮脚/拉伸" }
       ];
       const makePlan = () => {
         const plan = [{ stage: 0, kind: "prep", seconds: 30 }];
@@ -352,8 +354,8 @@
         return full ? ["hip-extension","leg-raise","hip-adduction","ankle-inversion"][item.stage] : "continue";
       }
       class MediaChannel {
-        constructor({ media, sourceFor, now, setTimer, clearTimer, warn, recover, log }) {
-          Object.assign(this,{ media, sourceFor, now, setTimer, clearTimer, warn, recover, log });
+        constructor({ media, sourceFor, now, setTimer, clearTimer, warn, recover, onPlaying, log }) {
+          Object.assign(this,{ media, sourceFor, now, setTimer, clearTimer, warn, recover, onPlaying, log });
           this.job = null; this.failed = false;
         }
         cancel() {
@@ -386,7 +388,9 @@
             this.job = { key, finish };
             media.onplaying = () => {
               if (done) return; sawPlaying = true;
-              this.log("media-playing",{key,cue:cues[key][0],elapsed:this.now()-started});
+              const elapsed = this.now()-started;
+              this.log("media-playing",{key,cue:cues[key][0],elapsed});
+              this.onPlaying?.(key,elapsed);
             };
             media.onended = () => {
               if (done) return;
@@ -499,7 +503,13 @@
       const speaker = new MediaChannel({
         media: $("cueAudio"), sourceFor: key => mediaSources.get(key), now: clock,
         setTimer: (fn,ms) => setTimeout(fn,ms), clearTimer: id => clearTimeout(id),
-        warn: soundMessage, recover: () => soundMessage(""), log
+        warn: soundMessage, recover: () => soundMessage(""),
+        onPlaying: (key,elapsed) => {
+          if (key === "beep" && elapsed > 150 && engine.state === "running") {
+            pause("声音延迟，已暂停。",true); speaker.failed = true;
+            soundMessage("声音延迟，请重试声音。");
+          }
+        }, log
       });
       function playbackSession() {
         // Optional on newer iOS; HTML media playback also works without AudioSession.
@@ -528,6 +538,11 @@
       function speak(key, retry=false) {
         if (isDebug) { log("test-cue",{key,cue:cues[key][0]}); return Promise.resolve(); }
         if (!soundEnabled) return Promise.resolve();
+        if (speaker.job && !retry) {
+          speaker.cancel(); speaker.failed = true;
+          soundMessage("声音中断，请重试声音。"); log("media-overrun",{key});
+          return Promise.resolve();
+        }
         return speaker.play(key,retry);
       }
       function beep(at,index) {
@@ -627,12 +642,11 @@
         text("exerciseName",`${item.stage+1}. ${stages[item.stage].name}`);
         text("exerciseMeta",stages[item.stage].equipment);
         $("exerciseMeta").hidden = !stages[item.stage].equipment;
-        const phase = { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息",stretch:"拉伸" }[item.kind];
+        const phase = item.stage===4 && item.kind==="work" ? "踮脚" : { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息",stretch:"拉伸" }[item.kind];
         document.querySelector(".scoreboard").dataset.state = state;
-        $("actionName").hidden = item.stage < 4;
+        $("positionCopy").hidden = ["ready","finished"].includes(state);
         text("phaseName",state==="ready"?"下一项就位":state==="paused"?"已暂停":state==="cue"?"准备开始":state==="finished"?"训练完成":phase);
-        text("actionName",state==="finished"?"五项全部完成":item.stage===4?item.action:item.kind==="prep"?"30 秒初始准备":phase);
-        text("positionCopy",state==="finished"?"第 4/4 轮拉伸已完成":item.stage===4?`第 ${item.round}/4 轮 · ${item.kind==="stretch"?"拉伸":"踮脚"}`:item.kind==="prep"?"第一项尚未开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
+        text("positionCopy",state==="finished"?"第 4/4 轮拉伸已完成":item.stage===4?`第 ${item.round}/4 轮`:item.kind==="prep"?"第一项尚未开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
         text("countdown",String(Math.max(0,Math.ceil(engine.remaining/unitMs-1e-6))));
         text("countdownUnit",state==="ready"?"秒 · 确认后开始":state==="finished"?(savedCompletion?"打卡已保存":"打卡尚未保存"):state==="cue"?"秒 · 提示音后计时":"秒");
         $("nextCue").hidden = ["finished","ready","paused"].includes(state);
