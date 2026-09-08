@@ -97,10 +97,12 @@ Phase, group, repetition, and remaining time must be understandable in one glanc
 ## Layout
 
 The page is a centered full-height lane between two rope markers.
-Idle mode places the plain-language promise beside one oversized Start block on wide screens and stacks them on phones.
+Idle mode places one compact full-width Start block directly below the five-stage progress.
+There is no promise headline, formula subtitle, introductory paragraph, or placeholder for removed copy.
 Running mode splits the scoreboard into a dark phase bay and a dominant clock field, then linearizes those zones below 700px.
 The same scoreboard shows the initial preparation countdown before any repetition becomes active.
 Five numbered stage points stay above it, followed by the unabridged exercise identity and equipment.
+The shared action-details disclosure holds dosage without repeating it above the active clock.
 The next-stage ready screen keeps a stationary upcoming duration and puts the explicit continue action inside the clock field, not below the fold after the progress lanes.
 The outer width is capped at 920px with responsive gutters and safe-area padding.
 A quiet month calendar follows the training surface rather than competing with its countdown.
@@ -120,8 +122,9 @@ Circular forms appear only as partial lane-rope and equipment markings, never as
 
 ### Start Button
 
-The Start button is a full orange equipment block with Kai display text, an authored waveform, and a large touch target.
-Hover lifts it by 3px, active press moves it down by 1px, and disabled state reduces saturation while audio initializes.
+The Start button is a compact full-width orange equipment block with Kai display text, a waveform, and a large touch target.
+Hover lifts it by 3px and active press moves it down by 1px.
+The sound toggle and test/retry action follow the training controls and remain accessible before starting.
 
 ### Scoreboard
 
@@ -159,8 +162,10 @@ The calendar is a simple seven-column grid with Monday first, month navigation a
 Completed dates use pool teal with white text; today has a dark outline and the word 「今天」, including on a completed date.
 Multiple full sessions on a day still produce one marked date, while the weekly summary counts sessions against 3-4 per week.
 Calendar marks are informational, not editable or clickable check-ins.
-Storage, speech and wake-lock warnings state what failed and how to proceed without claiming success.
-Local-only storage and the foreground/unlocked-phone limitation remain in the footer.
+The empty calendar has no explanatory paragraph or replacement card.
+Storage, playback and wake-lock warnings use short actionable statuses without claiming physical audibility.
+Playback status sits next to a real test/retry action rather than a separate warning essay.
+Local-only storage and the foreground/unlocked-phone limitation remain as two short footer lines.
 
 ### Operate Extension Tokens
 
