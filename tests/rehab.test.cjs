@@ -435,6 +435,7 @@ test('真实页面控制器：暂停语音期后迟到完成不启动，刷新�
   await restored.click('continueButton');await restored.advance(2000);
   await restored.click('resetButton');await restored.click('confirmResetButton');
   assert.equal(restored.state().runState,'idle');assert.equal(restored.state().historyCount,0);
+  assert.equal(restored.elements.get('runtimeMessage').textContent,'');
   assert.equal(storage.get('rehab-timer:v1:sentinel'),'synthetic-do-not-touch');
 });
 

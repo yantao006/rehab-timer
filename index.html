@@ -638,6 +638,7 @@
         const state = engine.state, item = engine.interval;
         $("idlePanel").hidden = state !== "idle"; $("runningPanel").hidden = state === "idle";
         stagePoints();
+        showMessage("runtimeMessage",state === "paused" ? engine.reason : "");
         if (state === "idle") return;
         text("exerciseName",`${item.stage+1}. ${stages[item.stage].name}`);
         text("exerciseMeta",stages[item.stage].equipment);
@@ -657,7 +658,6 @@
         $("skipPrepButton").hidden = state!=="running" || item.kind!=="prep";
         $("skipRestButton").hidden = state!=="running" || item.kind!=="group-rest";
         $("retrySaveButton").hidden = state!=="finished" || savedCompletion;
-        showMessage("runtimeMessage",state === "paused" ? engine.reason : "");
         lanes();
       }
       function pause(reason="", conservative=false) {
