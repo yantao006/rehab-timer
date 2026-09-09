@@ -278,7 +278,7 @@ test('公历闰年/月首周一偏移/跨年/今天与完成并存/周一至周�
 });
 function mediaFixture(supported=true) {
   let now=0, next=0, recovered=0; const timers=new Map(), warnings=[], events=[], requests=[];
-  const media={currentTime:0, load() { this.currentTime=0; }, pause() {}, play() {
+  const media={currentTime:0, loads:0, load() { this.loads++; this.currentTime=0; }, pause() {}, play() {
     requests.push({src:this.src, ended:this.onended, playing:this.onplaying, error:this.onerror}); return Promise.resolve();
   }};
   const channel = new MediaChannel({media:supported?media:null, now:()=>now,
@@ -289,14 +289,16 @@ function mediaFixture(supported=true) {
     end(key) { media.onplaying(); this.advance(cues[key][1]); media.currentTime=cues[key][1]/1000; media.onended(); }
   };
 }
-test('所有播报映射短且不复述组次/剩余秒；恢复休息仍仅休息', () => {
+test('前四项报组号与第几次继续；休息仍仅休息；不报秒数', () => {
   for (const item of plan) for (const full of [true,false]) {
-    const key=cueFor(item,full); assert.ok(cues[key]); assert.ok(cues[key][0].length<=4);
-    assert.doesNotMatch(cues[key][0],/[0-9秒组次轮]/);
+    const key=cueFor(item,full); assert.ok(cues[key],key);
+    assert.doesNotMatch(cues[key][0],/[0-9秒]/);
     if (['rest','group-rest'].includes(item.kind)) assert.equal(cues[key][0],'休息');
   }
-  assert.equal(cues[cueFor(plan[1],true)][0],'大腿后伸');
-  assert.equal(cues[cueFor(plan[5])][0],'训练继续');
+  assert.equal(cues[cueFor(plan[1],true)][0],'第一组，大腿后伸');
+  assert.equal(cues[cueFor(plan[1],false)][0],'第一组');
+  assert.equal(cues[cueFor(plan[3])][0],'第二次继续');
+  assert.equal(cues[cueFor(plan[13])][0],'第二组');
   assert.equal(cues[cueFor(plan[93])][0],'踮脚');
   assert.equal(cues[cueFor(plan[94])][0],'拉伸');
 });
@@ -309,7 +311,8 @@ test('随站 PCM 语音是真实非静音资源，时长与排程清单逐一匹
     assert.equal(Math.round(data.length/2/rate*1000),duration);
     let power=0; for(let i=0;i<data.length;i+=2) power+=(data.readInt16LE(i)/32768)**2;
     assert.ok(Math.sqrt(power/(data.length/2))>.015,`${key} must contain a real signal`);
-    assert.ok(duration<1200,`${key} fits well inside a 5 second rest`);
+    assert.ok(duration<2200,`${key} stays a short cue`);
+    if (/^(rest|group-2|continue-\d)$/.test(key)) assert.ok(duration+1000<5000,`${key} fits inside a 5 second rest`);
   }
 });
 test('媒体播放立即调用 play，不先 await；完成须 playing + 时长 + 播放位置', async () => {
@@ -319,6 +322,23 @@ test('媒体播放立即调用 play，不先 await；完成须 playing + 时长 
   assert.equal(resolved,false); f.end('prepare'); await promise;
   assert.equal(f.channel.job,null); assert.equal(f.recovered,1); assert.equal(f.warnings.length,0);
   assert.deepEqual(f.events.map(e=>e.type),['media-request','media-playing','media-ended']);
+});
+test('ended 有 playing 和足够墙钟时长时，currentTime 不准仍算播完，不锁死后续', async () => {
+  const f=mediaFixture();
+  const first=f.channel.play('rest');
+  f.media.onplaying(); f.advance(cues.rest[1]); f.media.currentTime=0; f.media.onended();
+  assert.equal(await first,'ended'); assert.equal(f.channel.failed,false);
+  const second=f.channel.play('beep'); f.end('beep'); assert.equal(await second,'ended');
+  assert.equal(f.warnings.length,0); assert.equal(f.media.loads,0);
+});
+test('换源只赋值 src，不二次 load；同条重复播放只重置进度', async () => {
+  const f=mediaFixture();
+  const a=f.channel.play('beep'); f.end('beep'); await a;
+  assert.equal(f.media.loads,0); assert.equal(f.requests[0].src,'audio/beep.wav');
+  const b=f.channel.play('beep'); assert.equal(f.media.currentTime,0);
+  f.end('beep'); await b; assert.equal(f.media.loads,0);
+  const c=f.channel.play('rest'); f.end('rest'); await c;
+  assert.equal(f.media.loads,0); assert.equal(f.requests.at(-1).src,'audio/rest.wav');
 });
 test('即时假结束/只有play promise成功不是播音成功；无进度如实报错', async () => {
   for(const sawPlaying of [true,false]) {
@@ -330,10 +350,10 @@ test('即时假结束/只有play promise成功不是播音成功；无进度如�
 });
 test('取消/重复点击/抢音仅保留最新任务；陈旧事件和拒绝不会污染恢复', async () => {
   const f=mediaFixture(); const a=f.channel.play('prepare'); const old=f.requests[0];
-  const b=f.channel.play('continue'); assert.equal(await a,'canceled');
+  const b=f.channel.play('continue-2'); assert.equal(await a,'canceled');
   old.ended(); old.playing(); old.error();
-  assert.equal(f.channel.job.key,'continue'); assert.equal(f.warnings.length,0);
-  f.end('continue'); assert.equal(await b,'ended'); assert.equal(f.timers.size,0);
+  assert.equal(f.channel.job.key,'continue-2'); assert.equal(f.warnings.length,0);
+  f.end('continue-2'); assert.equal(await b,'ended'); assert.equal(f.timers.size,0);
   const c=f.channel.play('rest'); f.channel.cancel(); assert.equal(await c,'canceled');
   assert.equal(f.channel.job,null); assert.equal(f.timers.size,0);
 });
@@ -367,16 +387,16 @@ test('真实页面控制器：首次点击直接播准备，真实30秒后动作
   assert.deepEqual(f.requests[0],{key:'prepare',at:0,gesture:true});
   await f.advance(600); assert.equal(f.state().index,0); assert.equal(f.state().runState,'running');
   await f.advance(29400); assert.equal(f.state().index,0);
-  await f.advance(1700); assert.equal(f.state().index,1);
+  await f.advance(2500); assert.equal(f.state().index,1);
   const work=f.events().find(e=>e.type==='interval-start'&&e.index===1);
   const prep=f.events().find(e=>e.type==='interval-start'&&e.index===0);
-  assert.ok(work.zero-prep.zero>=30000 && work.zero-prep.zero<31500);
-  await f.advance(15000); assert.equal(f.state().index,2);
+  assert.ok(work.zero-prep.zero>=30000 && work.zero-prep.zero<33000);
+  await f.advance(15500); assert.equal(f.state().index,2);
   await f.advance(5000); assert.equal(f.state().index,3);
   const starts=f.events().filter(e=>e.type==='interval-start');
   assert.equal(starts[2].zero-starts[1].zero,15000); assert.equal(starts[3].zero-starts[2].zero,5000);
   assert.equal(f.requests.filter(r=>r.key==='rest').length,1);
-  assert.equal(f.requests.filter(r=>r.key==='continue').length,1);
+  assert.equal(f.requests.filter(r=>r.key==='continue-2').length,1);
   assert.equal(f.elements.get('audioStatusText').textContent,'');
 });
 test('真实页面控制器：声音关不停视觉计时，重开/试听先暂停，显式继续不丢剩余时间', async () => {
@@ -386,7 +406,7 @@ test('真实页面控制器：声音关不停视觉计时，重开/试听先暂�
   await f.click('soundButton');assert.equal(f.state().runState,'paused');
   const remaining=f.state().remaining;assert.equal(f.requests.at(-1).key,'test');assert.equal(f.requests.at(-1).gesture,true);
   await f.advance(5000);assert.equal(f.state().remaining,remaining);
-  await f.click('continueButton');assert.equal(f.requests.at(-1).key,'continue');assert.equal(f.requests.at(-1).gesture,true);
+  await f.click('continueButton');assert.equal(f.requests.at(-1).key,'group-1');assert.equal(f.requests.at(-1).gesture,true);
   await f.advance(1000);assert.equal(f.state().runState,'running');assert.ok(f.state().remaining<=remaining);
   await f.visibility(true);const paused=f.state().remaining;await f.advance(50000);await f.visibility(false);
   assert.equal(f.state().runState,'paused');assert.equal(f.state().remaining,paused);
@@ -401,7 +421,7 @@ test('真实页面控制器：失败仅短状态，自动段不重试堆积；�
   await f.click('continueButton');await f.advance(1000);assert.equal(f.state().runState,'running');
 });
 test('真实页面控制器：语音加载超界不会与提示音重叠，也不会被提示音成功清掉错误', async () => {
-  const f=appFixture();await f.click('startButton');await f.advance(32000);
+  const f=appFixture();await f.click('startButton');await f.advance(34000);
   f.stall(true);await f.advance(15000);
   assert.equal(f.state().mediaState,'unavailable');assert.equal(f.state().mediaJob,null);
   assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
@@ -409,17 +429,17 @@ test('真实页面控制器：语音加载超界不会与提示音重叠，也�
   assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
 });
 test('生产回归：718ms媒体启动延迟仍能在短休结束前播完，不禁用后续声音', async () => {
-  const f=appFixture({mediaDelays:{continue:718}});await f.click('startButton');await f.advance(54000);
+  const f=appFixture({mediaDelays:{'continue-2':718}});await f.click('startButton');await f.advance(54000);
   assert.equal(f.state().runState,'running');assert.equal(f.state().index,3);
   assert.notEqual(f.state().mediaState,'unavailable');assert.equal(f.elements.get('audioStatusText').textContent,'');
-  const events=f.events(), ended=events.find(e=>e.type==='media-ended'&&e.key==='continue');
+  const events=f.events(), ended=events.find(e=>e.type==='media-ended'&&e.key==='continue-2');
   const zero=events.find(e=>e.type==='beep-request'&&e.index===3);
   assert.ok(ended && zero);assert.ok(ended.at<zero.zero);
   const starts=events.filter(e=>e.type==='interval-start');
   assert.equal(starts[2].zero-starts[1].zero,15000);assert.equal(starts[3].zero-starts[2].zero,5000);
 });
 test('延迟超过预留量仍明确中断，不靠放宽结束判定或排队掩盖错误', async () => {
-  const f=appFixture({mediaDelays:{continue:1300}});await f.click('startButton');await f.advance(54000);
+  const f=appFixture({mediaDelays:{'continue-2':1300}});await f.click('startButton');await f.advance(54000);
   assert.equal(f.state().mediaState,'unavailable');assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
   assert.equal(f.state().mediaJob,null);
 });
@@ -439,6 +459,9 @@ test('实际页面完整标准秒长调度：五项短播报、四次手动边�
   const final=f.events().filter(e=>e.type==='interval-start'&&e.stage===4);
   assert.equal(final.length,8);for(let i=1;i<8;i++)assert.equal(final[i].zero-final[i-1].zero,30000);
   assert.equal(f.requests.filter(r=>r.key==='next').length,4);
+  assert.equal(f.requests.filter(r=>r.key==='hip-extension').length,1);
+  assert.equal(f.requests.filter(r=>r.key==='group-2').length,4);
+  assert.equal(f.requests.filter(r=>r.key==='continue-2').length,8);
   for(const key of ['leg-raise','hip-adduction','ankle-inversion'])assert.equal(f.requests.filter(r=>r.key===key).length,1);
   const restored=appFixture({storage:f.storage});assert.equal(restored.state().historyCount,1);
 });

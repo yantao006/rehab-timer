@@ -12,13 +12,15 @@
 - 归档 SHA-256：`e58351ed7149f290a54534538badd4077cdbe6fddc964b24d0bee870415d1514`。
 - `model.onnx` SHA-256：`bf30582eb1b012250a35b1a4a80e7dfbcf8485e7bb9de0d95efbbeef0e4ad86d`。
 - 推理工具：sherpa-onnx 1.13.7，CPU，speaker 0，speed 0.8，句末加句号。
+- `休息` 覆盖词库声调为一声 + 二声。
+  原词库是一声 + 一声，听起来像「修西」。
 - 处理：首尾保留 35ms，峰值归一化至 0.8，单声道 16-bit PCM。
 - `beep.wav` 为本项目脚本生成的 880Hz、170ms 正弦提示音，不含第三方采样。
 
 ## 文本与再生成
 
-12 条语音文本及对应文件名位于 `scripts/generate-cues.py`。
-动作名、训练继续、休息、下一项等映射及素材时长位于 `index.html` 的 `RehabCore.cues` / `cueFor`。
+语音文本及对应文件名位于 `scripts/generate-cues.py`。
+组号、次数继续、动作名、休息、下一项等映射及素材时长位于 `index.html` 的 `RehabCore.cues` / `cueFor`。
 所有训练事实和剂量仍以 [PRODUCT.md](../PRODUCT.md) 为准，短播报不替代动作详情。
 
 仅维护素材时需要本地 Python 生成工具，浏览器与发布均不需要模型或这些开发依赖。
