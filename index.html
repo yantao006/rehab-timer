@@ -341,9 +341,13 @@
       }
       // Fixed, locally generated PCM recordings. No device voices or runtime TTS service.
       const cues = Object.freeze({
-        prepare: ["准备",494], rest: ["休息",529], continue: ["训练继续",878],
-        "hip-extension": ["大腿后伸",1087], "leg-raise": ["直抬腿",888],
-        "hip-adduction": ["髋内收",819], "ankle-inversion": ["踝内翻",763],
+        prepare: ["准备",494], rest: ["休息",576],
+        "group-1": ["第一组",654], "group-2": ["第二组",608],
+        "continue-2": ["第二次继续",1088], "continue-3": ["第三次继续",1188],
+        "continue-4": ["第四次继续",1181], "continue-5": ["第五次继续",1179],
+        "continue-6": ["第六次继续",1236],
+        "hip-extension": ["第一组，大腿后伸",1946], "leg-raise": ["第一组，直抬腿",1555],
+        "hip-adduction": ["第一组，髋内收",1553], "ankle-inversion": ["第一组，踝内翻",1520],
         "calf-raise": ["踮脚",584], stretch: ["拉伸",523],
         next: ["下一项",701], complete: ["训练完成",903], test: ["声音测试",1145], beep: ["",170]
       });
@@ -351,20 +355,24 @@
         if (item.kind === "prep") return "prepare";
         if (["rest","group-rest"].includes(item.kind)) return "rest";
         if (item.stage === 4) return item.kind === "stretch" ? "stretch" : "calf-raise";
-        return full ? ["hip-extension","leg-raise","hip-adduction","ankle-inversion"][item.stage] : "continue";
+        if (item.rep === 1) {
+          if (item.group === 2) return "group-2";
+          return full ? ["hip-extension","leg-raise","hip-adduction","ankle-inversion"][item.stage] : "group-1";
+        }
+        return `continue-${item.rep}`;
       }
       class MediaChannel {
         constructor({ media, sourceFor, now, setTimer, clearTimer, warn, recover, onPlaying, log }) {
           Object.assign(this,{ media, sourceFor, now, setTimer, clearTimer, warn, recover, onPlaying, log });
-          this.job = null; this.failed = false;
+          this.job = null; this.failed = false; this.loadedKey = null;
         }
-        cancel() {
+        cancel(stop=true) {
           this.job?.finish("canceled");
-          try { this.media?.pause(); } catch { /* Nothing is playing. */ }
+          if (stop) try { this.media?.pause(); } catch { /* Nothing is playing. */ }
         }
         play(key, retry=false) {
           // Never enqueue: exactly one retained media element owns both speech and beeps.
-          this.cancel();
+          this.cancel(false);
           if (retry) this.failed = false;
           if (this.failed) return Promise.resolve("unavailable");
           const fail = reason => {
@@ -395,7 +403,8 @@
             media.onended = () => {
               if (done) return;
               const elapsed = this.now()-started, position = media.currentTime*1000;
-              if (!sawPlaying || elapsed < cues[key][1]*.65 || position < cues[key][1]-100) { reject("no-playback-progress"); return; }
+              // iOS often reports stale currentTime on short WAV ended; wall-clock + playing is the bound.
+              if (!sawPlaying || elapsed < cues[key][1]*.65) { reject("no-playback-progress"); return; }
               // Decoder progress is evidence of playback, never proof of physical audibility.
               this.log("media-ended",{key,elapsed,position}); this.recover(); finish("ended");
             };
@@ -403,10 +412,15 @@
             timeout = this.setTimer(() => reject("timeout"),5000+cues[key][1]);
             this.log("media-request",{key,cue:cues[key][0]});
             try {
-              media.src = this.sourceFor?.(key) || `audio/${key}.wav`;
-              media.load();
+              const src = this.sourceFor?.(key) || `audio/${key}.wav`;
+              if (this.loadedKey !== key) {
+                media.src = src;
+                this.loadedKey = key;
+              } else {
+                try { media.currentTime = 0; } catch { /* Engine may throw before metadata. */ }
+              }
+              // Assigning src already starts resource selection. A second load() drops iOS activation.
               // This call must remain synchronous with Start / Continue / Retry clicks.
-              // Reuse the unlocked HTML media element, not a new element per interval.
               const promise = media.play();
               promise?.catch(error => reject(error.name || "play-rejected"));
             } catch (error) { reject(error.name || "play-threw"); }

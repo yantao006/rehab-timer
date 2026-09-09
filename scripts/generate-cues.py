@@ -5,6 +5,7 @@ import json
 import math
 import pathlib
 import sys
+import tempfile
 import wave
 import numpy as np
 import sherpa_onnx
@@ -12,17 +13,32 @@ import sherpa_onnx
 model = pathlib.Path(sys.argv[1])
 out = pathlib.Path(__file__).resolve().parents[1] / "audio"
 out.mkdir(exist_ok=True)
+lexicon_text = (model / "lexicon.txt").read_text()
+# Stock entry is first+first tone (xiū xī), which sounds like 修西 rather than 休息.
+# First+second (xiū xí) keeps both syllables audible.
+stock_rest, spoken_rest = "休息 x iu x i 1 1 1 1", "休息 x iu x i 1 1 2 2"
+if stock_rest not in lexicon_text:
+    raise RuntimeError("Expected 休息 lexicon entry is missing")
+lexicon_path = pathlib.Path(tempfile.gettempdir()) / "rehab-melo-lexicon.txt"
+lexicon_path.write_text(lexicon_text.replace(stock_rest, spoken_rest, 1))
 config = sherpa_onnx.OfflineTtsConfig(
     model=sherpa_onnx.OfflineTtsModelConfig(
         vits=sherpa_onnx.OfflineTtsVitsModelConfig(
-            model=str(model / "model.onnx"), lexicon=str(model / "lexicon.txt"),
+            model=str(model / "model.onnx"), lexicon=str(lexicon_path),
             tokens=str(model / "tokens.txt"), dict_dir=str(model / "dict")),
         num_threads=2, provider="cpu"))
 tts = sherpa_onnx.OfflineTts(config)
-cues = {"prepare": "准备", "rest": "休息", "continue": "训练继续",
-        "hip-extension": "大腿后伸", "leg-raise": "直抬腿", "hip-adduction": "髋内收",
-        "ankle-inversion": "踝内翻", "calf-raise": "踮脚", "stretch": "拉伸",
-        "next": "下一项", "complete": "训练完成", "test": "声音测试"}
+cues = {
+    "prepare": "准备", "rest": "休息",
+    "group-1": "第一组", "group-2": "第二组",
+    "continue-2": "第二次继续", "continue-3": "第三次继续",
+    "continue-4": "第四次继续", "continue-5": "第五次继续",
+    "continue-6": "第六次继续",
+    "hip-extension": "第一组，大腿后伸", "leg-raise": "第一组，直抬腿",
+    "hip-adduction": "第一组，髋内收", "ankle-inversion": "第一组，踝内翻",
+    "calf-raise": "踮脚", "stretch": "拉伸",
+    "next": "下一项", "complete": "训练完成", "test": "声音测试",
+}
 manifest = {}
 for key, text in [*cues.items(), ("beep", "")]:
     if key == "beep":
