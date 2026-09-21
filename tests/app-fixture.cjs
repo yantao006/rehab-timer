@@ -22,9 +22,32 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0
   for(const [,id] of html.matchAll(/id="([^"]+)"/g)) elements.set(id,new Element());
   const media=elements.get('cueAudio'); media.currentTime=0; media.paused=true;
   let mediaTimers=[];
-  media.pause=()=>{media.paused=true;for(const id of mediaTimers)timers.delete(id);mediaTimers=[];};
+  const clearMediaTimers=()=>{for(const id of mediaTimers)timers.delete(id);mediaTimers=[];};
+  media.pause=()=>{media.paused=true;clearMediaTimers();media.listeners.pause?.();};
   media.load=()=>{media.pause();media.currentTime=0;};
   media.play=()=>{
+    const stage=media.src.match(/stage-(\d+)\.mp3$/);
+    if (stage) {
+      const key=`stage-${stage[1]}`; requests.push({key,at:now,gesture});
+      if(rejectPlay) return Promise.reject({name:'NotAllowedError'});
+      clearMediaTimers();
+      const track=context.RehabCore.stageTrack(Number(stage[1])-1);
+      const start=Math.max(0,Number(media.currentTime)||0), started=now;
+      media.onloadedmetadata?.(); media.paused=false; media.listeners.playing?.();
+      if(!stuck) {
+        const tick=()=>{
+          const position=Math.min(track.duration,start+(now-started)/1000);
+          media.currentTime=position; media.listeners.timeupdate?.();
+        };
+        for(let position=start+.25; position<track.duration; position+=.25) {
+          mediaTimers.push(setTimer(tick,(position-start)*1000));
+        }
+        mediaTimers.push(setTimer(()=>{
+          media.currentTime=track.duration; media.listeners.timeupdate?.(); media.listeners.ended?.(); media.paused=true;
+        },(track.duration-start)*1000));
+      }
+      return Promise.resolve();
+    }
     const key=media.src.match(/([^/]+)\.wav$/)[1]; requests.push({key,at:now,gesture});
     if(rejectPlay) return Promise.reject({name:'NotAllowedError'});
     media.paused=false;

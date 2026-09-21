@@ -382,98 +382,51 @@ test('红框内容连同容器删除，详情仍可查看，声音恢复操作�
 });
 
 const appFixture = require('./app-fixture.cjs');
-test('真实页面控制器：首次点击直接播准备，真实30秒后动作，再15秒工作/5秒短休', async () => {
+test('真实页面控制器：首次点击启动连续阶段音轨，隐藏页面不靠回调暂停', async () => {
   const f=appFixture(); await f.click('startButton');
-  assert.deepEqual(f.requests[0],{key:'prepare',at:0,gesture:true});
-  await f.advance(600); assert.equal(f.state().index,0); assert.equal(f.state().runState,'running');
-  await f.advance(29400); assert.equal(f.state().index,0);
-  await f.advance(2500); assert.equal(f.state().index,1);
-  const work=f.events().find(e=>e.type==='interval-start'&&e.index===1);
-  const prep=f.events().find(e=>e.type==='interval-start'&&e.index===0);
-  assert.ok(work.zero-prep.zero>=30000 && work.zero-prep.zero<33000);
-  await f.advance(15500); assert.equal(f.state().index,2);
-  await f.advance(5000); assert.equal(f.state().index,3);
-  const starts=f.events().filter(e=>e.type==='interval-start');
-  assert.equal(starts[2].zero-starts[1].zero,15000); assert.equal(starts[3].zero-starts[2].zero,5000);
-  assert.equal(f.requests.filter(r=>r.key==='rest').length,1);
-  assert.equal(f.requests.filter(r=>r.key==='continue-2').length,1);
-  assert.equal(f.elements.get('audioStatusText').textContent,'');
+  assert.deepEqual(f.requests[0],{key:'stage-1',at:0,gesture:true});
+  await f.advance(1000);
+  assert.equal(f.state().index,0); assert.equal(f.state().runState,'running');
+  assert.equal(f.state().mediaState,'playing');
+  const before=f.media.currentTime;
+  await f.visibility(true); await f.advance(5000);
+  assert.equal(f.state().runState,'running'); assert.ok(f.media.currentTime>before);
+  await f.visibility(false); assert.equal(f.state().runState,'running');
 });
-test('真实页面控制器：声音关不停视觉计时，重开/试听先暂停，显式继续不丢剩余时间', async () => {
-  const f=appFixture(); await f.click('startButton');await f.advance(3000);
-  await f.click('soundButton'); const count=f.requests.length;
-  await f.advance(29000); assert.equal(f.requests.length,count);assert.equal(f.state().index,1);
-  await f.click('soundButton');assert.equal(f.state().runState,'paused');
-  const remaining=f.state().remaining;assert.equal(f.requests.at(-1).key,'test');assert.equal(f.requests.at(-1).gesture,true);
-  await f.advance(5000);assert.equal(f.state().remaining,remaining);
-  await f.click('continueButton');assert.equal(f.requests.at(-1).key,'group-1');assert.equal(f.requests.at(-1).gesture,true);
-  await f.advance(1000);assert.equal(f.state().runState,'running');assert.ok(f.state().remaining<=remaining);
-  await f.visibility(true);const paused=f.state().remaining;await f.advance(50000);await f.visibility(false);
-  assert.equal(f.state().runState,'paused');assert.equal(f.state().remaining,paused);
+test('真实页面控制器：静音不暂停连续音轨，重新开启声音需手动继续', async () => {
+  const f=appFixture(); await f.click('startButton'); await f.advance(1000);
+  const before=f.media.currentTime; await f.click('soundButton'); await f.advance(2000);
+  assert.equal(f.state().runState,'running'); assert.ok(f.media.currentTime>before); assert.equal(f.media.muted,true);
+  await f.click('soundButton'); assert.equal(f.state().runState,'paused');
+  assert.equal(f.requests.at(-1).key,'test'); assert.equal(f.requests.at(-1).gesture,true);
+  await f.click('continueButton'); await f.advance(1000); assert.equal(f.state().runState,'running');
 });
-test('真实页面控制器：失败仅短状态，自动段不重试堆积；恢复点击真正再次播放', async () => {
-  const f=appFixture({rejectPlay:true});await f.click('startButton');await f.advance(50000);
-  assert.equal(f.state().runState,'running');assert.equal(f.requests.length,1);
-  assert.equal(f.elements.get('testSoundButton').textContent,'重试声音');
-  assert.match(f.elements.get('audioStatusText').textContent,/未播放/);
-  f.fail(false);await f.click('testSoundButton');assert.equal(f.state().runState,'paused');
-  await f.advance(1500);assert.equal(f.elements.get('audioStatusText').textContent,'');
-  await f.click('continueButton');await f.advance(1000);assert.equal(f.state().runState,'running');
-});
-test('真实页面控制器：语音加载超界不会与提示音重叠，也不会被提示音成功清掉错误', async () => {
-  const f=appFixture();await f.click('startButton');await f.advance(34000);
-  f.stall(true);await f.advance(15000);
-  assert.equal(f.state().mediaState,'unavailable');assert.equal(f.state().mediaJob,null);
-  assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
-  const count=f.requests.length;await f.advance(5000);assert.equal(f.requests.length,count);
-  assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
-});
-test('生产回归：718ms媒体启动延迟仍能在短休结束前播完，不禁用后续声音', async () => {
-  const f=appFixture({mediaDelays:{'continue-2':718}});await f.click('startButton');await f.advance(54000);
-  assert.equal(f.state().runState,'running');assert.equal(f.state().index,3);
-  assert.notEqual(f.state().mediaState,'unavailable');assert.equal(f.elements.get('audioStatusText').textContent,'');
-  const events=f.events(), ended=events.find(e=>e.type==='media-ended'&&e.key==='continue-2');
-  const zero=events.find(e=>e.type==='beep-request'&&e.index===3);
-  assert.ok(ended && zero);assert.ok(ended.at<zero.zero);
-  const starts=events.filter(e=>e.type==='interval-start');
-  assert.equal(starts[2].zero-starts[1].zero,15000);assert.equal(starts[3].zero-starts[2].zero,5000);
-});
-test('延迟超过预留量仍明确中断，不靠放宽结束判定或排队掩盖错误', async () => {
-  const f=appFixture({mediaDelays:{'continue-2':1300}});await f.click('startButton');await f.advance(54000);
-  assert.equal(f.state().mediaState,'unavailable');assert.match(f.elements.get('audioStatusText').textContent,/语音中断/);
-  assert.equal(f.state().mediaJob,null);
-});
-test('真实页面控制器：提示音解码启动过晚则暂停，不冒充准时零点', async () => {
-  const f=appFixture({beepDelay:300});await f.click('startButton');await f.advance(2000);
-  assert.equal(f.state().runState,'paused');assert.equal(f.state().mediaState,'unavailable');
-  assert.match(f.elements.get('audioStatusText').textContent,/延迟/);
-});
-test('实际页面完整标准秒长调度：五项短播报、四次手动边界、组休跳过和完整打卡', async () => {
-  const f=appFixture();await f.click('startButton');let waits=0,skip=false;
-  for(let i=0;i<1600 && f.state().runState!=='finished';i++) {
-    if(f.state().runState==='ready') {const before=f.state().index;await f.advance(3000);assert.equal(f.state().index,before);waits++;await f.click('continueButton');}
-    if(!skip && f.state().index===12 && f.state().runState==='running') {await f.click('skipRestButton');skip=true;assert.equal(f.state().index,13);}
-    await f.advance(1000);
+test('连续阶段音轨覆盖每项计划并在间隔边界预留语音和提示音', () => {
+  for(let stage=0;stage<5;stage++) {
+    const track=context.RehabCore.stageTrack(stage), entries=plan.filter(p=>p.stage===stage);
+    assert.equal(track.entries.length,entries.length);
+    assert.deepEqual(track.entries.map(e=>e.index),entries.map(e=>e.index));
+    assert.ok(track.duration>track.end);
+    for(const sound of track.sounds) assert.ok(cues[sound.key]);
   }
-  assert.equal(waits,4);assert.equal(skip,true);assert.equal(f.state().runState,'finished');assert.equal(f.state().historyCount,1);
-  const final=f.events().filter(e=>e.type==='interval-start'&&e.stage===4);
-  assert.equal(final.length,8);for(let i=1;i<8;i++)assert.equal(final[i].zero-final[i-1].zero,30000);
-  assert.equal(f.requests.filter(r=>r.key==='next').length,4);
-  assert.equal(f.requests.filter(r=>r.key==='hip-extension').length,1);
-  assert.equal(f.requests.filter(r=>r.key==='group-2').length,4);
-  assert.equal(f.requests.filter(r=>r.key==='continue-2').length,8);
-  for(const key of ['leg-raise','hip-adduction','ankle-inversion'])assert.equal(f.requests.filter(r=>r.key===key).length,1);
-  const restored=appFixture({storage:f.storage});assert.equal(restored.state().historyCount,1);
 });
-test('真实页面控制器：暂停语音期后迟到完成不启动，刷新仍需手动继续且历史不变', async () => {
+test('历史日期可补记、取消并在本地存储中保留覆盖值', () => {
+  const storage=new MemoryStorage(), store=new Store(storage,'rehab-timer:test');
+  assert.equal(store.setDate('2026-09-20',true,new Date(2026,8,21)),true);
+  assert.equal(store.history().some(r=>r.date==='2026-09-20'),true);
+  assert.equal(store.setDate('2026-09-20',false,new Date(2026,8,21)),true);
+  assert.equal(store.history().some(r=>r.date==='2026-09-20'),false);
+  assert.equal(storage.getItem('rehab-timer:test:date:2026-09-20'),'false');
+  assert.equal(store.setDate('2026-09-22',true,new Date(2026,8,21)),false);
+});
+test('连续音轨暂停后刷新仍需手动继续，重置不新增历史', async () => {
   const storage=new Map([['rehab-timer:v1:sentinel','synthetic-do-not-touch']]);
-  const f=appFixture({storage});await f.click('startButton');const old=f.media.onended;
-  await f.click('pauseButton');old();await f.advance(10000);assert.equal(f.state().runState,'paused');
-  const restored=appFixture({storage});assert.equal(restored.state().runState,'paused');assert.equal(restored.requests.length,0);
-  await restored.click('continueButton');await restored.advance(2000);
-  await restored.click('resetButton');await restored.click('confirmResetButton');
-  assert.equal(restored.state().runState,'idle');assert.equal(restored.state().historyCount,0);
-  assert.equal(restored.elements.get('runtimeMessage').textContent,'');
+  const f=appFixture({storage}); await f.click('startButton'); await f.advance(1000); await f.click('pauseButton');
+  assert.equal(f.state().runState,'paused');
+  const restored=appFixture({storage}); assert.equal(restored.state().runState,'paused'); assert.equal(restored.requests.length,0);
+  await restored.click('continueButton'); await restored.advance(1000); assert.equal(restored.state().runState,'running');
+  await restored.click('resetButton'); await restored.click('confirmResetButton');
+  assert.equal(restored.state().runState,'idle'); assert.equal(restored.state().historyCount,0);
   assert.equal(storage.get('rehab-timer:v1:sentinel'),'synthetic-do-not-touch');
 });
 

@@ -2,6 +2,7 @@
 
 这些 PCM WAV 是离线生成并随站发布的固定素材，不调用设备语音合成、外部 TTS、麦克风或录音权限。
 页面复用一个 HTMLAudioElement 播放全部语音和提示音。
+`stage-1.mp3` 到 `stage-5.mp3` 是由本目录 WAV 和 `RehabCore.stageTrack` 排程离线拼接的连续音轨，让后台播放不依赖隐藏页面的 JavaScript 定时器。
 部署必须包含整个 `audio/` 目录，不能再只上传 `index.html`。
 
 ## 来源
@@ -31,6 +32,7 @@ uv run --with sherpa-onnx==1.13.7 --with soundfile python scripts/generate-cues.
 node --test tests/rehab.test.cjs
 ```
 
-重新生成可能改变模型采样与 WAV 秒长，必须用脚本输出更新 `RehabCore.cues` 的时长，并重新进行资源、播放与可懂度验收。
+重新生成可能改变模型采样与 WAV 秒长，必须用脚本输出更新 `RehabCore.cues` 的时长，并重新运行 `python3 scripts/generate-stage-tracks.py`，再进行资源、播放与可懂度验收。
+连续音轨需要 `ffmpeg` 的 libmp3lame；浏览器发布不需要 ffmpeg。
 测试从真实 WAV 头和 PCM 内容核对秒长及非静音信号，而非只检查文件存在。
 系统 playing/ended 和转写结果都不能代替目标手机的人耳听音。

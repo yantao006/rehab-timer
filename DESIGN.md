@@ -161,11 +161,12 @@ The confirmation has clear commit/cancel choices and deliberate keyboard focus.
 The calendar is a simple seven-column grid with Monday first, month navigation and no decorative achievement cards.
 Completed dates use pool teal with white text; today has a dark outline and the word 「今天」, including on a completed date.
 Multiple full sessions on a day still produce one marked date, while the weekly summary counts sessions against 3-4 per week.
-Calendar marks are informational, not editable or clickable check-ins.
+Calendar dates are compact editable local check-ins with a separate date field and explicit mark/cancel actions.
 The empty calendar has no explanatory paragraph or replacement card.
-Storage, playback and wake-lock warnings use short actionable statuses without claiming physical audibility.
+Storage, background playback and wake-lock warnings use short actionable statuses without claiming physical audibility.
+The footer states that continuous stage audio can survive ordinary tab hiding where the browser permits it, while lock-screen and iOS background behavior remains an OS/browser limitation.
 Playback status sits next to a real test/retry action rather than a separate warning essay.
-Local-only storage and the foreground/unlocked-phone limitation remain as two short footer lines.
+Local-only storage and the browser-dependent background/lock-screen limitation remain as two short footer lines.
 
 ### Operate Extension Tokens
 
