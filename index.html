@@ -32,8 +32,8 @@
     }
     body::before { left: 0; } body::after { right: 0; }
     button { font: inherit; touch-action: manipulation; cursor: pointer; }
-    button:focus-visible, summary:focus-visible { outline: 3px solid var(--pool); outline-offset: 4px; }
-    button:disabled { opacity: .55; cursor: wait; }
+    button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--pool); outline-offset: 4px; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
     h1, h2, h3, p { margin: 0; }
     .app-shell {
       position: relative; z-index: 1; width: min(100% - 64px, 920px); margin: 0 auto;
@@ -105,13 +105,17 @@
     .month-title { font-size: 1.15rem; text-align: center; }
     .calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; }
     .weekday { color: var(--muted); font-size: .85rem; padding: 8px 0; text-align: center; }
-    .calendar-day { min-height: 58px; padding: 7px 2px; display: grid; justify-items: center; align-content: center; gap: 3px; border-radius: 8px; border: 1px solid transparent; font-variant-numeric: tabular-nums; }
+    .history-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 24px; }
+    .history-editor input { min-width: 0; max-width: 100%; color: var(--ink); background: var(--foam); font: inherit; }
+    .calendar-day[aria-pressed="true"] { box-shadow: inset 0 -3px var(--pool-dark); }
+    .calendar-day:not(:disabled):hover { outline: 2px solid var(--pool); outline-offset: -2px; }
+    .calendar-day { background: transparent; color: inherit; min-height: 58px; padding: 7px 2px; display: grid; justify-items: center; align-content: center; gap: 3px; border-radius: 8px; border: 1px solid transparent; font-variant-numeric: tabular-nums; }
     .calendar-day[data-complete="true"] { background: var(--pool); color: white; }
     .calendar-day[aria-current="date"] { border: 2px solid var(--pool-dark); }
     .calendar-day small { font-size: .7rem; line-height: 1.3; }
     .page-footer { display: grid; gap: 10px; padding: 18px 4px 0; border-top: 1px solid var(--line); }
-    .foreground-reminder { font-size: .95rem; font-weight: 700; line-height: 1.6; }
-    .foreground-reminder strong { color: var(--signal-dark); }
+    .background-reminder { font-size: .95rem; font-weight: 700; line-height: 1.6; }
+    .background-reminder strong { color: var(--signal-dark); }
     .local-note { font-size: .86rem; line-height: 1.65; color: var(--muted); }
     .debug-badge { margin-bottom: 16px; padding: 10px 14px; border: 1px solid var(--pool); color: var(--pool-deep); font-weight: 700; line-height: 1.6; }
     @keyframes scoreboard-in {
@@ -209,10 +213,18 @@
         <h3 class="month-title" id="monthTitle" aria-live="polite"></h3>
         <button class="control" id="nextMonth" type="button" aria-label="下一个月">下月</button>
       </div>
-      <div class="calendar-grid" id="calendarGrid" role="list" aria-label="本月日期"></div>
+      <p class="local-note">点击日期可补记或取消完成，仅修改本地记录。</p>
+      <div class="calendar-grid" id="calendarGrid" role="group" aria-label="本月日期"></div>
+      <div class="history-editor">
+        <label for="historyDate">编辑日期</label>
+        <input class="control" id="historyDate" type="date" required>
+        <button class="control" id="markDate" type="button">标记完成</button>
+        <button class="control danger" id="unmarkDate" type="button">取消完成</button>
+      </div>
+      <p class="local-note" id="historyStatus" role="status"></p>
     </section>
     <footer class="page-footer">
-      <p class="foreground-reminder"><strong>请勿锁屏或切 App。</strong>离开即暂停。</p>
+      <p class="background-reminder"><strong>支持后台连续音轨。</strong>锁屏能否播放取决于系统；首次请试听验证，项间仍需手动继续。</p>
       <p class="local-note">记录仅存本浏览器，清除网站数据会丢失。</p>
     </footer>
   </div>
@@ -454,7 +466,25 @@
               } catch { this.warn("部分历史读取失败，原数据已保留。"); }
             }
           } catch { this.warn("历史读取失败，请检查网站存储。"); }
+          try {
+            for (let i=0; i<this.storage.length; i++) {
+              const key = this.storage.key(i);
+              if (!key?.startsWith(`${this.prefix}:date:`)) continue;
+              const date = key.slice(`${this.prefix}:date:`.length), completed = this.read(key);
+              if (!validDate(date) || typeof completed !== "boolean") { this.warn("部分日期编辑读取失败。"); continue; }
+              if (!completed) { for (let j=records.length-1;j>=0;j--) if (records[j].date===date) records.splice(j,1); }
+              else if (!records.some(r=>r.date===date)) records.push({version:VERSION,id:`manual-${date}`,date,finishedAt:new Date(`${date}T12:00:00`).toISOString()});
+            }
+          } catch { this.warn("日期编辑读取失败，请检查网站存储。"); }
           return records;
+        }
+        setDate(date, completed, now = new Date()) {
+          if (!validDate(date) || date > localDate(now)) return false;
+          try {
+            // One atomic override masks a date without destroying its session records.
+            this.storage.setItem(`${this.prefix}:date:${date}`,JSON.stringify(completed));
+            return true;
+          } catch { this.warn("日期未保存，请检查网站存储后重试。"); return false; }
         }
         complete(record) {
           if (!validRecord(record)) return false;
@@ -468,13 +498,30 @@
           } catch { this.warn("打卡未保存，请检查存储后重试。"); return false; }
         }
       }
-      return { VERSION, PROGRAM, stages, plan, Engine, Store, MediaChannel, cues, cueFor, localDate, validDate, monthCells, weeklyCount };
+      // Continuous stage media: silence, speech and beeps share one playback clock.
+      function stageTrack(stage) {
+        let end = 0;
+        const entries = [], sounds = [];
+        for (const item of plan.filter(p => p.stage === stage)) {
+          const key = cueFor(item, entries.length === 0 || item.index === 1);
+          const opening = entries.length === 0 || item.index === 1;
+          const start = opening ? end + cues[key][1]/1000 + .25 : end;
+          sounds.push({ key, at: opening ? end : start-cues[key][1]/1000-.25 });
+          sounds.push({ key: "beep", at: start });
+          end = start+item.seconds;
+          entries.push({ index:item.index, start, end });
+        }
+        const key = stage === 4 ? "complete" : "next";
+        sounds.push({ key, at:end });
+        return { entries, sounds, end, duration:end+cues[key][1]/1000+.25 };
+      }
+      return { VERSION, PROGRAM, stages, plan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
     })();
   </script>
   <script id="rehab-app">
     (() => {
       "use strict";
-      const { stages, plan, Engine, Store, MediaChannel, cues, cueFor, monthCells, weeklyCount } = RehabCore;
+      const { stages, plan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, monthCells, weeklyCount } = RehabCore;
       const params = new URLSearchParams(location.search);
       const debugMs = Number(params.get("debugMs"));
       const isDebug = Number.isFinite(debugMs) && debugMs >= 20 && debugMs < 1000;
@@ -498,6 +545,8 @@
       let nextCueIndex = -1, beepIndex = -1, lastSave = "", lastLane = "";
       let pendingBeep = null, soundEnabled = true;
       const issues = new Map();
+      let selectedDate = localDate(new Date());
+      $("historyDate").value = selectedDate; $("historyDate").max = selectedDate;
       let month = new Date(); month = new Date(month.getFullYear(),month.getMonth(),1,12);
       const warn = (key,message) => { issues.set(key,message); showMessage("compatibilityMessage",[...issues.values()].join(" ")); };
       const soundMessage = message => {
@@ -529,7 +578,89 @@
         // Optional on newer iOS; HTML media playback also works without AudioSession.
         try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch { /* Optional enhancement. */ }
       }
+      const trackMedia = $("cueAudio");
+      let activeTrack = null;
+      let trackStage = -1, resumePosition = null, resumeStage = -1;
+      function mediaState(state) {
+        if (navigator.mediaSession) navigator.mediaSession.playbackState = state;
+      }
+      function syncTrack() {
+        if (!activeTrack || !["cue","running"].includes(engine.state)) return;
+        const position = trackMedia.currentTime, track = activeTrack;
+        if (!Number.isFinite(position)) return;
+        if (position >= track.end) {
+          const finishedStage = trackStage;
+          activeTrack = null;
+          if (finishedStage === 4) {
+            engine.index = plan.length-1; engine.remaining = 0; engine.state = "finished";
+            const date = new Date();
+            engine.completion = {version:1,id:engine.id,date:localDate(date),finishedAt:date.toISOString()};
+            finishSave();
+          } else {
+            engine.index = track.entries[track.entries.length-1].index+1;
+            engine.remaining = engine.interval.seconds*unitMs; engine.state = "ready";
+            checkpoint(true); render();
+          }
+          releaseWake(); mediaState("paused"); log("track-boundary",{stage:finishedStage});
+          return;
+        }
+        const entry = track.entries.find(e => position < e.end);
+        const changed = engine.index !== entry.index;
+        engine.index = entry.index;
+        engine.remaining = Math.min(engine.interval.seconds,entry.end-position)*1000;
+        engine.state = position < entry.start ? "cue" : "running";
+        engine.lastNow = clock(); engine.deadline = engine.lastNow+engine.remaining;
+        if (changed) log("track-interval",{index:entry.index,position,hidden:document.hidden});
+        checkpoint(); render();
+      }
+      function startTrack() {
+        clearAudio(); playbackSession();
+        trackStage = engine.interval.stage; activeTrack = stageTrack(trackStage);
+        const entry = activeTrack.entries.find(e => e.index === engine.index);
+        const fresh = engine.remaining === engine.interval.seconds*unitMs;
+        const key = cueFor(engine.interval,engine.index===1 || entry===activeTrack.entries[0]);
+        const position = resumeStage === trackStage && Number.isFinite(resumePosition)
+          ? resumePosition
+          : fresh ? Math.max(0,entry.start-cues[key][1]/1000-.25) : entry.end-engine.remaining/1000;
+        resumePosition = null; resumeStage = -1;
+        const src = `audio/stage-${trackStage+1}.mp3`;
+        trackMedia.src = src; speaker.loadedKey = null;
+        trackMedia.muted = !soundEnabled;
+        // Set the seek before play; metadata fallback retains the same gesture-started playback.
+        const token = generation;
+        trackMedia.onloadedmetadata = () => {
+          if (token===generation && activeTrack) trackMedia.currentTime = position;
+        };
+        try { trackMedia.currentTime = position; } catch { /* Metadata callback applies it. */ }
+        try {
+          trackMedia.play()?.catch(() => {
+            if (token!==generation) return;
+            pause("声音未播放，请重试声音后继续。"); soundMessage("声音未播放，请重试声音。");
+          });
+        } catch { pause("声音未播放，请重试声音后继续。"); }
+        if (navigator.mediaSession) {
+          try { navigator.mediaSession.metadata = new MediaMetadata({title:"康复训练计时器",artist:stages[trackStage].short}); } catch { /* Optional. */ }
+        }
+        mediaState("playing"); render(); checkpoint(true); requestWake(token);
+        log("track-start",{stage:trackStage,position});
+      }
+      trackMedia.addEventListener("timeupdate",syncTrack);
+      trackMedia.addEventListener("ended",syncTrack);
+      trackMedia.addEventListener("playing",() => { if (activeTrack) { soundMessage(""); log("track-playing",{position:trackMedia.currentTime}); } });
+      trackMedia.addEventListener("pause",() => {
+        if (activeTrack && trackMedia.paused && !trackMedia.ended) pause("媒体已暂停，请确认后继续。");
+      });
+      trackMedia.addEventListener("error",() => { if (activeTrack) pause("音轨加载失败，请重试声音后继续。"); });
+      trackMedia.addEventListener("waiting",() => { if (activeTrack) soundMessage("音轨缓冲中，计时随声音等待。"); });
+      if (navigator.mediaSession) {
+        for (const [action,handler] of Object.entries({
+          pause:() => pause(), stop:() => pause(),
+          play:() => { if (engine.state==="paused" && engine.continue()) enterCue(true,true); }
+        })) try { navigator.mediaSession.setActionHandler(action,handler); } catch { /* Optional. */ }
+      }
       function clearAudio() {
+        activeTrack = null; trackMedia.onloadedmetadata = null;
+        try { trackMedia.pause(); } catch { /* Media may already be detached. */ }
         generation++; clearTimeout(timer); timer = null;
         speaker.cancel();
         clearTimeout(beepTimer); beepTimer = null;
@@ -596,15 +727,25 @@
         const today = new Date();
         text("monthTitle",`${month.getFullYear()} 年 ${month.getMonth()+1} 月`);
         text("weeklySummary",`本周 ${weeklyCount(history,today)} 次 · 每周 3-4 次`);
+        const completed = history.some(r => r.date === selectedDate);
+        text("historyStatus",`${selectedDate} · ${completed ? "已完成" : "未标记完成"}`);
+        $("markDate").disabled = completed; $("unmarkDate").disabled = !completed;
+        $("historyDate").max = localDate(today);
         const grid = $("calendarGrid"); grid.replaceChildren();
         for (const day of ["一","二","三","四","五","六","日"]) {
           const el = document.createElement("span"); el.className = "weekday"; el.textContent = day; el.setAttribute("aria-hidden","true"); grid.append(el);
         }
         for (const cell of monthCells(month.getFullYear(),month.getMonth(),history,today)) {
-          const el = document.createElement("div");
+          const el = document.createElement(cell ? "button" : "div");
           if (!cell) { el.setAttribute("aria-hidden","true"); grid.append(el); continue; }
+          el.type = "button"; el.disabled = cell.date > localDate(today);
           el.className = "calendar-day"; el.dataset.complete = cell.complete;
-          el.setAttribute("role","listitem"); el.setAttribute("aria-label",`${cell.date}${cell.today?"，今天":""}${cell.complete?"，已完成训练":"，无完整打卡"}`);
+          el.setAttribute("aria-pressed",String(cell.date === selectedDate));
+          el.addEventListener("click",() => {
+            selectedDate = cell.date; $("historyDate").value = selectedDate; renderCalendar();
+            $("historyDate").focus();
+          });
+          el.setAttribute("aria-label",`${cell.date}${cell.today?"，今天":""}${cell.complete?"，已完成训练":"，无完整打卡"}`);
           if (cell.today) el.setAttribute("aria-current","date");
           const number = document.createElement("span"); number.textContent = cell.day; el.append(number);
           if (cell.today || cell.complete) { const label = document.createElement("small"); label.textContent = cell.today ? (cell.complete?"今天·完成":"今天") : "完成"; el.append(label); }
@@ -675,11 +816,30 @@
         lanes();
       }
       function pause(reason="", conservative=false) {
+        if (activeTrack) {
+          syncTrack();
+          resumePosition = trackMedia.currentTime;
+          resumeStage = trackStage;
+        }
         if (!engine.pause(conservative && engine.state==="running"?engine.lastNow:clock())) return;
-        engine.reason = reason; clearAudio(); releaseWake(); checkpoint(true); render();
+        engine.reason = reason; clearAudio(); mediaState("paused"); releaseWake(); checkpoint(true); render();
         log("paused",{index:engine.index,remaining:engine.remaining,reason});
       }
       async function enterCue(resuming=false, gesture=false) {
+        if (!isDebug) {
+          if (resuming) {
+            if (!Number.isFinite(resumePosition)) {
+              const track = stageTrack(engine.interval.stage);
+              const entry = track.entries.find(e => e.index === engine.index);
+              resumePosition = entry.end-engine.remaining/1000; resumeStage = engine.interval.stage;
+            }
+            clearAudio(); playbackSession();
+            const token = generation, playing = speak(cueFor(engine.interval,true),gesture);
+            render(); checkpoint(true); await playing;
+            if (token!==generation || engine.state!=="cue") return;
+          }
+          startTrack(); return;
+        }
         clearAudio(); const token = generation;
         const item = engine.interval;
         if (gesture) playbackSession();
@@ -746,17 +906,20 @@
       function testSound() {
         pause(); speaker.cancel(); clearTimeout(beepTimer); beepTimer = null;
         soundEnabled = true; $("soundButton").setAttribute("aria-pressed","true"); text("soundButton","声音：开");
-        playbackSession(); speaker.play("test",true);
+        playbackSession(); trackMedia.muted = false; speaker.play("test",true);
       }
       $("testSoundButton").addEventListener("click",testSound);
       $("soundButton").addEventListener("click",() => {
         if (!soundEnabled) { testSound(); return; }
-        soundEnabled = false; speaker.cancel(); clearTimeout(beepTimer); beepTimer = null;
+        soundEnabled = false; trackMedia.muted = true;
+        if (!activeTrack) speaker.cancel();
+        clearTimeout(beepTimer); beepTimer = null;
         $("soundButton").setAttribute("aria-pressed","false"); text("soundButton","声音：关");
         soundMessage(""); log("sound-off");
       });
       for (const [id,kind] of [["skipPrepButton","prep"],["skipRestButton","group-rest"]]) {
         $(id).addEventListener("click",() => {
+          if (activeTrack) syncTrack();
           if (engine.skip(kind,clock())) { log("rest-skipped",{kind,index:engine.index}); enterCue(false,true); }
           else {
             clearAudio();
@@ -778,12 +941,34 @@
       for (const [id,offset] of [["prevMonth",-1],["nextMonth",1]]) $(id).addEventListener("click",() => {
         month = new Date(month.getFullYear(),month.getMonth()+offset,1,12); renderCalendar();
       });
+      $("historyDate").addEventListener("change",() => {
+        if (!$("historyDate").checkValidity()) { $("historyDate").reportValidity(); return; }
+        selectedDate = $("historyDate").value;
+        const [y,m] = selectedDate.split("-").map(Number); month = new Date(y,m-1,1,12);
+        renderCalendar();
+      });
+      for (const [id,completed] of [["markDate",true],["unmarkDate",false]]) $(id).addEventListener("click",() => {
+        if (!$("historyDate").checkValidity()) { $("historyDate").reportValidity(); return; }
+        selectedDate = $("historyDate").value;
+        if (store.setDate(selectedDate,completed)) {
+          history = store.history(); renderCalendar();
+          text("historyStatus",`${selectedDate} · ${completed ? "已标记完成" : "已取消完成"}，已保存`);
+        }
+      });
       document.addEventListener("visibilitychange",() => {
-        if (document.hidden) { pause("离开页面，已暂停。",true); clearAudio(); releaseWake(); }
-        else { renderCalendar(); render(); }
+        log("visibility",{hidden:document.hidden});
+        if (document.hidden) {
+          if (isDebug) pause("测试页面离开前台，已暂停。",true);
+          checkpoint(true); releaseWake();
+        } else {
+          syncTrack();
+          if (activeTrack && trackMedia.paused) pause("后台播放已中断，请确认后继续。");
+          if (activeTrack) requestWake(generation);
+          history = store.history(); renderCalendar(); render();
+        }
       });
       window.addEventListener("pagehide",() => { pause("离开页面，已暂停。",true); clearAudio(); releaseWake(); });
-      window.addEventListener("storage",e => { if (e.key?.startsWith(`${prefix}:done:`)) { history=store.history(); renderCalendar(); } });
+      window.addEventListener("storage",e => { if ((e.key?.startsWith(`${prefix}:done:`) || e.key?.startsWith(`${prefix}:date:`))) { history=store.history(); renderCalendar(); } });
       stages.forEach((stage,i) => {
         const point = document.createElement("li"); point.className="stage-point";
         point.innerHTML=`<span class="stage-number">${i+1}</span><span class="stage-label"></span><span class="stage-status"></span>`;
