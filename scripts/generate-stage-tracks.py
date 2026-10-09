@@ -13,11 +13,15 @@ script = """
 const fs = require('node:fs'), vm = require('node:vm');
 const html = fs.readFileSync('index.html','utf8');
 vm.runInThisContext(html.match(/<script id="rehab-core">([\\s\\S]*?)<\\/script>/)[1]);
-console.log(JSON.stringify(RehabCore.stages.map((_,i)=>RehabCore.stageTrack(i))));
+console.log(JSON.stringify([
+  ...RehabCore.stages.map((_,i)=>({name:`stage-${i+1}`,track:RehabCore.stageTrack(i)})),
+  ...RehabCore.jointStages.slice(0,4).map((_,i)=>({name:`stage-joint-${i+1}`,track:RehabCore.stageTrack(i,RehabCore.JOINT_PROGRAM)}))
+]));
 """
 tracks = json.loads(subprocess.check_output(['node', '-e', script], cwd=root))
 rate = 44100
-for i, track in enumerate(tracks, 1):
+for item in tracks:
+    name, track = item['name'], item['track']
     pcm = bytearray(round(track['duration'] * rate) * 2)
     occupied = []
     for sound in track['sounds']:
@@ -37,5 +41,5 @@ for i, track in enumerate(tracks, 1):
             output.writeframes(pcm)
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(wav),
                         '-codec:a', 'libmp3lame', '-b:a', '48k', '-map_metadata', '-1',
-                        str(root / 'audio' / f'stage-{i}.mp3')], check=True)
-    print(f"stage-{i}.mp3: {track['duration']:.3f}s, {len(track['sounds'])} cues")
+                        str(root / 'audio' / f'{name}.mp3')], check=True)
+    print(f"{name}.mp3: {track['duration']:.3f}s, {len(track['sounds'])} cues")

@@ -2,7 +2,8 @@
 
 这些 PCM WAV 是离线生成并随站发布的固定素材，不调用设备语音合成、外部 TTS、麦克风或录音权限。
 页面复用一个 HTMLAudioElement 播放全部语音和提示音。
-`stage-1.mp3` 到 `stage-5.mp3` 是由本目录 WAV 和 `RehabCore.stageTrack` 排程离线拼接的连续音轨，让后台播放不依赖隐藏页面的 JavaScript 定时器。
+原计划的 `stage-1.mp3` 到 `stage-5.mp3` 以及新计划前四节的 `stage-joint-1.mp3` 到 `stage-joint-4.mp3` 由本目录 WAV 和 `RehabCore.stageTrack` 排程离线拼接，让后台播放不依赖隐藏页面的 JavaScript 定时器。
+新计划第五节由使用者逐组点完成，不需要连续计时音轨。
 部署必须包含整个 `audio/` 目录，不能再只上传 `index.html`。
 
 ## 来源

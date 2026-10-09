@@ -42,6 +42,10 @@
     .site-header { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 0 4px 22px; border-bottom: 1px solid var(--line); }
     .site-header h1 { max-width: 100%; font: 700 clamp(2rem,5vw,3.45rem)/.98 "Kaiti SC", STKaiti, KaiTi, serif; letter-spacing: -.04em; text-wrap: balance; }
     main { padding: 20px 0 24px; }
+    .plan-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; padding: 5px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--foam); }
+    .plan-tab { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 10px 12px; border: 0; border-radius: var(--radius); background: transparent; color: var(--pool-deep); font-weight: 700; line-height: 1.4; }
+    .plan-tab[aria-selected="true"] { background: var(--pool-deep); color: var(--foam); }
+    .plan-tab:hover:not([aria-selected="true"]) { background: var(--water); }
     .stage-progress { list-style: none; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 12px; margin: 0 0 26px; padding: 0; }
     .stage-point { min-width: 0; display: grid; justify-items: center; gap: 7px; text-align: center; color: var(--muted); }
     .stage-number { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #659da0; border-radius: 50%; background: var(--foam); font-weight: 800; font-size: 1.2rem; }
@@ -159,6 +163,11 @@
     </header>
     <main>
       <p class="debug-badge" id="debugBadge" hidden></p>
+      <div class="plan-tabs" role="tablist" aria-label="训练计划">
+        <button class="plan-tab" id="originalTab" type="button" role="tab" aria-selected="true" aria-controls="planContent" tabindex="0">原计划</button>
+        <button class="plan-tab" id="jointTab" type="button" role="tab" aria-selected="false" aria-controls="planContent" tabindex="-1">下肢关节居家训练</button>
+      </div>
+      <div id="planContent" role="tabpanel" aria-labelledby="originalTab">
       <ol class="stage-progress" id="stageProgress" aria-label="五项训练进度，仅展示，不可跳项"></ol>
       <section id="idlePanel" aria-label="开始训练">
           <button class="start-button" id="startButton" type="button">
@@ -186,6 +195,7 @@
             <button class="control" id="pauseButton" type="button" hidden>暂停</button>
             <button class="control" id="skipPrepButton" type="button" hidden>跳过准备</button>
             <button class="control" id="skipRestButton" type="button" hidden>跳过休息</button>
+            <button class="control primary" id="completeButton" type="button" hidden>完成</button>
             <button class="control danger" id="resetButton" type="button">结束 / 重新开始</button>
             <button class="control" id="retrySaveButton" type="button" hidden>重试保存打卡</button>
           </div>
@@ -205,6 +215,7 @@
       <p class="notice" id="runtimeMessage" role="status" hidden></p>
       <p class="notice" id="compatibilityMessage" role="status" hidden></p>
       <p class="notice" id="storageMessage" role="status" hidden></p>
+      </div>
     </main>
     <section class="calendar-section" aria-labelledby="calendarTitle">
       <div class="calendar-top"><h2 id="calendarTitle">训练日历</h2><p id="weeklySummary"></p></div>
@@ -234,6 +245,7 @@
       "use strict";
       const VERSION = 1;
       const PROGRAM = "five-stage-v1";
+      const JOINT_PROGRAM = "lower-limb-joints-v1";
       const stages = [
         { name: "俯卧左大腿屈膝后伸抗阻静力训练", equipment: "1 kg", short: "大腿后伸" },
         { name: "左侧直抬腿", equipment: "1 kg", short: "直抬腿" },
@@ -259,6 +271,29 @@
         return plan.map((item, index) => Object.freeze({ ...item, index }));
       };
       const plan = Object.freeze(makePlan());
+      const jointStages = Object.freeze([
+        { name: "双侧屈膝抗阻静力训练", equipment: "弹力带 10 到 15 磅", short: "屈膝抗阻" },
+        { name: "双侧屈膝屈髋维持训练", equipment: "", short: "屈膝屈髋" },
+        { name: "双髋外展抗阻静力训练", equipment: "20 磅弹力环", short: "髋外展" },
+        { name: "双髋内收抗阻静力训练", equipment: "仰卧内收腿夹球，球径 20 到 25 厘米", short: "髋内收" },
+        { name: "双侧抬腿跨障碍", equipment: "", short: "抬腿跨障碍" }
+      ]);
+      const jointPlan = Object.freeze((() => {
+        const items = [{ stage: 0, kind: "prep", seconds: 30 }];
+        for (let stage = 0; stage < 4; stage++) {
+          for (let group = 1; group <= 2; group++) for (let rep = 1; rep <= 6; rep++) {
+            items.push({ stage, group, rep, kind: "work", seconds: 15 });
+            if (group === 1 || rep < 6) items.push({ stage, group, rep, kind: "rest", seconds: 5 });
+          }
+          items.push({ stage, kind: "stage-rest", seconds: 60 });
+        }
+        for (let group = 1; group <= 2; group++) items.push({ stage: 4, group, kind: "manual", seconds: 0 });
+        return items.map((item,index) => Object.freeze({ ...item, index }));
+      })());
+      const programs = Object.freeze({
+        [PROGRAM]: { stages, plan },
+        [JOINT_PROGRAM]: { stages: jointStages, plan: jointPlan }
+      });
       const localDate = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
       const validDate = value => {
         if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -285,9 +320,9 @@
         return records.filter(r => r.date >= localDate(start) && r.date < localDate(end)).length;
       };
       class Engine {
-        constructor(unitMs = 1000) { this.unitMs = unitMs; this.reset(); }
+        constructor(unitMs = 1000, program = PROGRAM) { if (!programs[program]) throw new Error("unknown program"); this.unitMs = unitMs; this.program = program; this.plan = programs[program].plan; this.reset(); }
         reset() { this.state = "idle"; this.id = null; this.index = 0; this.remaining = 30*this.unitMs; this.deadline = null; this.lastNow = null; this.resumeState = "cue"; this.completion = null; this.reason = ""; }
-        get interval() { return plan[this.index]; }
+        get interval() { return this.plan[this.index]; }
         start(id) { if (this.state !== "idle" || !validId(id)) return false; this.id = id; this.state = "cue"; return true; }
         arm(now) { if (this.state !== "cue") return false; this.state = "running"; this.deadline = now+this.remaining; this.lastNow = now; return true; }
         tick(now, date = new Date()) {
@@ -302,7 +337,7 @@
           this.remaining = Math.max(0,this.deadline-now);
           if (now < this.deadline) return null;
           const old = this.interval;
-          if (this.index === plan.length-1) {
+          if (this.index === this.plan.length-1) {
             this.state = "finished";
             this.completion = { version: VERSION, id: this.id, date: localDate(date), finishedAt: date.toISOString() };
             return "finished";
@@ -315,8 +350,18 @@
           this.remaining = Math.max(0,this.deadline-now);
           return "interval";
         }
+        completeManual(date = new Date()) {
+          if (this.state !== "manual" || this.interval.kind !== "manual") return false;
+          if (this.index === this.plan.length-1) {
+            this.state = "finished";
+            this.completion = { version: VERSION, id: this.id, date: localDate(date), finishedAt: date.toISOString() };
+            return "finished";
+          }
+          this.index++; this.remaining = 0;
+          return "manual";
+        }
         pause(now) {
-          if (!["running","cue"].includes(this.state)) return false;
+          if (!["running","cue","manual"].includes(this.state)) return false;
           this.resumeState = this.state;
           if (this.state === "running") {
             // Do not count a gap since the last heartbeat as performed training.
@@ -327,7 +372,8 @@
         }
         continue() {
           if (!["paused","ready"].includes(this.state)) return false;
-          this.state = "cue"; this.reason = ""; return true;
+          this.state = this.state === "paused" && this.interval.kind === "manual" ? "manual" : "cue";
+          this.reason = ""; return true;
         }
         skip(kind, now) {
           if (this.state !== "running" || this.interval.kind !== kind || !["prep","group-rest"].includes(kind)) return false;
@@ -338,13 +384,15 @@
         }
         snapshot() {
           if (this.state === "idle") return null;
-          return { version: VERSION, program: PROGRAM, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
+          return { version: VERSION, program: this.program, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
         }
         restore(s) {
-          if (!s || s.version !== VERSION || s.program !== PROGRAM || s.unitMs !== this.unitMs || !validId(s.id) || !Number.isInteger(s.index) || !plan[s.index] || !Number.isFinite(s.remaining) || s.remaining < 0 || s.remaining > plan[s.index].seconds*this.unitMs || !["cue","running","paused","ready","finished"].includes(s.state)) return false;
-          if (s.state === "finished" && (s.index !== plan.length-1 || s.remaining !== 0 || !validRecord(s.completion) || s.completion.id !== s.id)) return false;
-          if (s.state !== "finished" && (s.remaining <= 0 || s.completion !== null)) return false;
-          if (s.state === "ready" && (s.index === 0 || plan[s.index-1].stage === plan[s.index].stage || s.remaining !== plan[s.index].seconds*this.unitMs)) return false;
+          const schedule = this.plan;
+          if (!s || s.version !== VERSION || s.program !== this.program || s.unitMs !== this.unitMs || !validId(s.id) || !Number.isInteger(s.index) || !schedule[s.index] || !Number.isFinite(s.remaining) || s.remaining < 0 || s.remaining > schedule[s.index].seconds*this.unitMs || !["cue","running","paused","ready","manual","finished"].includes(s.state)) return false;
+          if (s.state === "finished" && (s.index !== schedule.length-1 || s.remaining !== 0 || !validRecord(s.completion) || s.completion.id !== s.id)) return false;
+          if (s.state !== "finished" && (s.completion !== null || (schedule[s.index].kind !== "manual" && s.remaining <= 0))) return false;
+          if (s.state === "manual" && schedule[s.index].kind !== "manual") return false;
+          if (s.state === "ready" && (s.index === 0 || schedule[s.index-1].stage === schedule[s.index].stage || s.remaining !== schedule[s.index].seconds*this.unitMs)) return false;
           this.id = s.id; this.index = s.index; this.remaining = s.remaining; this.completion = s.completion;
           this.state = s.state === "finished" ? "finished" : s.state === "ready" ? "ready" : "paused";
           this.deadline = null; this.lastNow = null; this.reason = "进度已恢复。";
@@ -363,7 +411,12 @@
         "calf-raise": ["踮脚",584], stretch: ["拉伸",523],
         next: ["下一项",701], complete: ["训练完成",903], test: ["声音测试",1145], beep: ["",170]
       });
-      function cueFor(item, full=false) {
+      function cueFor(item, full=false, program=PROGRAM) {
+        if (program === JOINT_PROGRAM) {
+          if (["rest","stage-rest"].includes(item.kind)) return "rest";
+          if (item.kind === "manual") return `group-${item.group}`;
+          if (item.kind === "work" && item.rep === 1) return `group-${item.group}`;
+        }
         if (item.kind === "prep") return "prepare";
         if (["rest","group-rest"].includes(item.kind)) return "rest";
         if (item.stage === 4) return item.kind === "stretch" ? "stretch" : "calf-raise";
@@ -499,11 +552,12 @@
         }
       }
       // Continuous stage media: silence, speech and beeps share one playback clock.
-      function stageTrack(stage) {
+      function stageTrack(stage, program = PROGRAM) {
+        const schedule = programs[program].plan;
         let end = 0;
         const entries = [], sounds = [];
-        for (const item of plan.filter(p => p.stage === stage)) {
-          const key = cueFor(item, entries.length === 0 || item.index === 1);
+        for (const item of schedule.filter(p => p.stage === stage && p.kind !== "manual")) {
+          const key = cueFor(item, entries.length === 0 || item.index === 1, program);
           const opening = entries.length === 0 || item.index === 1;
           const start = opening ? end + cues[key][1]/1000 + .25 : end;
           sounds.push({ key, at: opening ? end : start-cues[key][1]/1000-.25 });
@@ -515,21 +569,23 @@
         sounds.push({ key, at:end });
         return { entries, sounds, end, duration:end+cues[key][1]/1000+.25 };
       }
-      return { VERSION, PROGRAM, stages, plan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
+      return { VERSION, PROGRAM, JOINT_PROGRAM, programs, stages, plan, jointStages, jointPlan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
     })();
   </script>
   <script id="rehab-app">
     (() => {
       "use strict";
-      const { stages, plan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, monthCells, weeklyCount } = RehabCore;
+      const { PROGRAM, JOINT_PROGRAM, programs, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, monthCells, weeklyCount } = RehabCore;
+      let program = PROGRAM, stages = programs[program].stages, plan = programs[program].plan;
       const params = new URLSearchParams(location.search);
       const debugMs = Number(params.get("debugMs"));
       const isDebug = Number.isFinite(debugMs) && debugMs >= 20 && debugMs < 1000;
       const unitMs = isDebug ? debugMs : 1000;
       const isTest = isDebug || params.get("test") === "1";
       // Debug is visual/beep-only. ?test=1 keeps real timing AND speech but isolates all data.
-      const prefix = isTest ? `rehab-timer:test:v1:${unitMs}` : "rehab-timer:v1";
-      const engine = new Engine(unitMs);
+      const basePrefix = isTest ? `rehab-timer:test:v1:${unitMs}` : "rehab-timer:v1";
+      let prefix = basePrefix;
+      let engine = new Engine(unitMs,program);
       const $ = id => document.getElementById(id);
       const text = (id,value) => { if ($(id).textContent !== value) $(id).textContent = value; };
       const showMessage = (id,value) => { text(id,value); $(id).hidden = !value; };
@@ -537,7 +593,8 @@
       const log = (type,detail={}) => { events.push({ type, at: performance.now(), ...detail }); if (events.length > 1200) events.shift(); };
       let storage;
       try { storage = localStorage; } catch { storage = null; }
-      const store = new Store(storage,prefix,message => showMessage("storageMessage",message));
+      const storageWarning = message => showMessage("storageMessage",message);
+      let store = new Store(storage,prefix,storageWarning);
       let history = store.history();
       let savedCompletion = false;
       const clock = () => performance.now();
@@ -589,9 +646,11 @@
         const position = trackMedia.currentTime, track = activeTrack;
         if (!Number.isFinite(position)) return;
         if (position >= track.end) {
+          // Let the new plan's short "下一项" finish before releasing its stage track.
+          if (program === JOINT_PROGRAM && position < track.duration-.25) return;
           const finishedStage = trackStage;
           activeTrack = null;
-          if (finishedStage === 4) {
+          if (finishedStage === 4 && program === PROGRAM) {
             engine.index = plan.length-1; engine.remaining = 0; engine.state = "finished";
             const date = new Date();
             engine.completion = {version:1,id:engine.id,date:localDate(date),finishedAt:date.toISOString()};
@@ -615,15 +674,15 @@
       }
       function startTrack() {
         clearAudio(); playbackSession();
-        trackStage = engine.interval.stage; activeTrack = stageTrack(trackStage);
+        trackStage = engine.interval.stage; activeTrack = stageTrack(trackStage,program);
         const entry = activeTrack.entries.find(e => e.index === engine.index);
         const fresh = engine.remaining === engine.interval.seconds*unitMs;
-        const key = cueFor(engine.interval,engine.index===1 || entry===activeTrack.entries[0]);
+        const key = cueFor(engine.interval,engine.index===1 || entry===activeTrack.entries[0],program);
         const position = resumeStage === trackStage && Number.isFinite(resumePosition)
           ? resumePosition
           : fresh ? Math.max(0,entry.start-cues[key][1]/1000-.25) : entry.end-engine.remaining/1000;
         resumePosition = null; resumeStage = -1;
-        const src = `audio/stage-${trackStage+1}.mp3`;
+        const src = program === PROGRAM ? `audio/stage-${trackStage+1}.mp3` : `audio/stage-joint-${trackStage+1}.mp3`;
         trackMedia.src = src; speaker.loadedKey = null;
         trackMedia.muted = !soundEnabled;
         // Set the seek before play; metadata fallback retains the same gesture-started playback.
@@ -726,7 +785,8 @@
       function renderCalendar() {
         const today = new Date();
         text("monthTitle",`${month.getFullYear()} 年 ${month.getMonth()+1} 月`);
-        text("weeklySummary",`本周 ${weeklyCount(history,today)} 次 · 每周 3-4 次`);
+        text("calendarTitle",`${program===PROGRAM?"原计划":"下肢关节居家训练"} · 训练日历`);
+        text("weeklySummary",`本周 ${weeklyCount(history,today)} 次${program===PROGRAM?" · 每周 3-4 次":""}`);
         const completed = history.some(r => r.date === selectedDate);
         text("historyStatus",`${selectedDate} · ${completed ? "已完成" : "未标记完成"}`);
         $("markDate").disabled = completed; $("unmarkDate").disabled = !completed;
@@ -767,11 +827,11 @@
         const item = engine.interval, key = `${engine.index}:${engine.state}`;
         if (lastLane === key) return; lastLane = key;
         const root = $("laneProgress"); root.replaceChildren();
-        const groups = item.stage===4 ? [1] : [1,2];
+        const groups = item.stage===4 && program===PROGRAM ? [1] : [1,2];
         for (const group of groups) {
-          const label = document.createElement("span"); label.className = "lane-label"; label.textContent = item.stage===4?"四轮交替":`第 ${group} 组`;
+          const label = document.createElement("span"); label.className = "lane-label"; label.textContent = item.stage===4 && program===PROGRAM?"四轮交替":`第 ${group} 组`;
           const cells = document.createElement("div"); cells.className = "lane-cells";
-          const works = plan.filter(p => p.stage===item.stage && (item.stage===4 || (p.group===group && p.kind==="work")));
+          const works = plan.filter(p => p.stage===item.stage && ((program===PROGRAM && item.stage===4) || (p.group===group && ["work","manual"].includes(p.kind))));
           cells.style.gridTemplateColumns = `repeat(${works.length},minmax(0,1fr))`;
           for (const work of works) {
             const cell = document.createElement("span"); cell.className = "lane-cell"; cell.setAttribute("aria-hidden","true");
@@ -785,9 +845,9 @@
         const item = engine.interval, next = plan[engine.index+1];
         if (!next) return "接着：完成";
         if (next.stage !== item.stage) return "接着：下一项就位";
-        if (item.kind === "prep") return "接着：大腿后伸";
-        if (next.stage===4) return `接着：${next.kind === "stretch" ? "拉伸" : "踮脚"}`;
-        return `接着：${next.kind === "group-rest" ? "组间休息" : next.kind === "rest" ? "休息" : "训练"}`;
+        if (item.kind === "prep") return `接着：${stages[0].short}`;
+        if (program === PROGRAM && next.stage===4) return `接着：${next.kind === "stretch" ? "拉伸" : "踮脚"}`;
+        return `接着：${next.kind === "stage-rest" ? "节间休息" : next.kind === "group-rest" ? "组间休息" : next.kind === "rest" ? "休息" : next.kind === "manual" ? "点完成" : "训练"}`;
       }
       function render() {
         const state = engine.state, item = engine.interval;
@@ -798,18 +858,19 @@
         text("exerciseName",`${item.stage+1}. ${stages[item.stage].name}`);
         text("exerciseMeta",stages[item.stage].equipment);
         $("exerciseMeta").hidden = !stages[item.stage].equipment;
-        const phase = item.stage===4 && item.kind==="work" ? "踮脚" : { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息",stretch:"拉伸" }[item.kind];
+        const phase = program===PROGRAM && item.stage===4 && item.kind==="work" ? "踮脚" : { prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息","stage-rest":"节间休息",manual:"训练",stretch:"拉伸" }[item.kind];
         document.querySelector(".scoreboard").dataset.state = state;
         $("positionCopy").hidden = ["ready","finished"].includes(state);
         text("phaseName",state==="ready"?"下一项就位":state==="paused"?"已暂停":state==="cue"?"准备开始":state==="finished"?"训练完成":phase);
-        text("positionCopy",state==="finished"?"第 4/4 轮拉伸已完成":item.stage===4?`第 ${item.round}/4 轮`:item.kind==="prep"?"第一项尚未开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
-        text("countdown",String(Math.max(0,Math.ceil(engine.remaining/unitMs-1e-6))));
-        text("countdownUnit",state==="ready"?"秒 · 确认后开始":state==="finished"?(savedCompletion?"打卡已保存":"打卡尚未保存"):state==="cue"?"秒 · 提示音后计时":"秒");
+        text("positionCopy",state==="finished"?(program===PROGRAM?"第 4/4 轮拉伸已完成":"第 2/2 组已完成"):item.kind==="manual"?`第 ${item.group}/2 组 · 8 到 10 次`:program===PROGRAM && item.stage===4?`第 ${item.round}/4 轮`:item.kind==="prep"?"第一项尚未开始":item.kind==="stage-rest"?"下一节即将开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${item.kind==="rest" || item.kind==="group-rest"?"已完成":""}`);
+        text("countdown",state==="finished" && item.kind==="manual" ? "完成" : item.kind==="manual" ? "8–10" : String(Math.max(0,Math.ceil(engine.remaining/unitMs-1e-6))));
+        text("countdownUnit",state==="ready" && item.kind==="manual"?"次 / 组 · 确认后开始":state==="ready"?"秒 · 确认后开始":state==="finished"?(savedCompletion?"打卡已保存":"打卡尚未保存"):item.kind==="manual"?"次 / 组 · 不计时":state==="cue"?"秒 · 提示音后计时":"秒");
         $("nextCue").hidden = ["finished","ready","paused"].includes(state);
         text("nextCue",nextText());
         $("continueButton").hidden = !["paused","ready"].includes(state);
         text("continueButton",state==="ready"?"准备好了，开始下一项":"继续训练");
-        $("pauseButton").hidden = !["running","cue"].includes(state);
+        $("pauseButton").hidden = !["running","cue","manual"].includes(state);
+        $("completeButton").hidden = state!=="manual";
         $("skipPrepButton").hidden = state!=="running" || item.kind!=="prep";
         $("skipRestButton").hidden = state!=="running" || item.kind!=="group-rest";
         $("retrySaveButton").hidden = state!=="finished" || savedCompletion;
@@ -827,24 +888,31 @@
       }
       async function enterCue(resuming=false, gesture=false) {
         if (!isDebug) {
+          if (engine.interval.kind === "manual") {
+            clearAudio(); playbackSession(); engine.state = "manual";
+            checkpoint(true); render(); speak(cueFor(engine.interval,true,program),gesture); return;
+          }
           if (resuming) {
             if (!Number.isFinite(resumePosition)) {
-              const track = stageTrack(engine.interval.stage);
+              const track = stageTrack(engine.interval.stage,program);
               const entry = track.entries.find(e => e.index === engine.index);
               resumePosition = entry.end-engine.remaining/1000; resumeStage = engine.interval.stage;
             }
             clearAudio(); playbackSession();
-            const token = generation, playing = speak(cueFor(engine.interval,true),gesture);
+            const token = generation, playing = speak(cueFor(engine.interval,true,program),gesture);
             render(); checkpoint(true); await playing;
             if (token!==generation || engine.state!=="cue") return;
           }
           startTrack(); return;
         }
+        if (engine.interval.kind === "manual") {
+          clearAudio(); engine.state = "manual"; checkpoint(true); render(); log("manual-start",{index:engine.index}); return;
+        }
         clearAudio(); const token = generation;
         const item = engine.interval;
         if (gesture) playbackSession();
         // No await or asynchronous initialization before the first media.play in a click.
-        const playing = speak(cueFor(item,!resuming),gesture);
+        const playing = speak(cueFor(item,!resuming,program),gesture);
         render(); checkpoint(true); requestWake(token);
         await playing;
         if (token!==generation || engine.state!=="cue") return;
@@ -876,7 +944,7 @@
         const next = plan[engine.index+1];
         const automatic = next && next.stage===engine.interval.stage && engine.interval.kind!=="prep";
         if (automatic) {
-          const cue = cueFor(next);
+          const cue = cueFor(next,false,program);
           // Allow media startup plus the 250ms heartbeat before the fixed boundary.
           // Production observed a 718ms decoder start even with a preloaded local Blob.
           const lead = isDebug?0:cues[cue][1]+1000;
@@ -903,6 +971,12 @@
         $("resetConfirm").hidden=true; enterCue(resuming,true);
       });
       $("pauseButton").addEventListener("click",() => pause());
+      $("completeButton").addEventListener("click",() => {
+        const result = engine.completeManual(new Date());
+        if (!result) return;
+        if (result === "finished") { finishSave(); speaker.cancel(); speak("complete"); log("session-finished",{id:engine.id,saved:savedCompletion}); }
+        else { checkpoint(true); render(); speaker.cancel(); speak(cueFor(engine.interval,true,program)); log("manual-start",{index:engine.index}); }
+      });
       function testSound() {
         pause(); speaker.cancel(); clearTimeout(beepTimer); beepTimer = null;
         soundEnabled = true; $("soundButton").setAttribute("aria-pressed","true"); text("soundButton","声音：开");
@@ -958,7 +1032,7 @@
       document.addEventListener("visibilitychange",() => {
         log("visibility",{hidden:document.hidden});
         if (document.hidden) {
-          if (isDebug) pause("测试页面离开前台，已暂停。",true);
+          if (isDebug && engine.state !== "manual") pause("测试页面离开前台，已暂停。",true);
           checkpoint(true); releaseWake();
         } else {
           syncTrack();
@@ -969,28 +1043,70 @@
       });
       window.addEventListener("pagehide",() => { pause("离开页面，已暂停。",true); clearAudio(); releaseWake(); });
       window.addEventListener("storage",e => { if ((e.key?.startsWith(`${prefix}:done:`) || e.key?.startsWith(`${prefix}:date:`))) { history=store.history(); renderCalendar(); } });
-      stages.forEach((stage,i) => {
-        const point = document.createElement("li"); point.className="stage-point";
-        point.innerHTML=`<span class="stage-number">${i+1}</span><span class="stage-label"></span><span class="stage-status"></span>`;
-        point.querySelector(".stage-label").textContent=stage.short; $("stageProgress").append(point);
-        const line = document.createElement("li"); line.textContent=`${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"15 秒训练 / 5 秒重复间休息，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮，无额外休息。"}`; $("routineList").append(line);
-      });
+      function renderProgramDetails() {
+        $("stageProgress").replaceChildren(); $("routineList").replaceChildren();
+        stages.forEach((stage,i) => {
+          const point = document.createElement("li"); point.className="stage-point";
+          point.innerHTML=`<span class="stage-number">${i+1}</span><span class="stage-label"></span><span class="stage-status"></span>`;
+          point.querySelector(".stage-label").textContent=stage.short; $("stageProgress").append(point);
+          const line = document.createElement("li");
+          line.textContent = program === PROGRAM
+            ? `${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"15 秒训练 / 5 秒重复间休息，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮，无额外休息。"}`
+            : `${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"每次 15 秒，休息 5 秒，6 次 × 2 组；两组之间休息 5 秒，节间休息 1 分钟。":"每组 8 到 10 次，共 2 组，逐组点击「完成」，不计时。"}`;
+          $("routineList").append(line);
+        });
+      }
+      renderProgramDetails();
       if (isTest) { $("debugBadge").hidden=false; text("debugBadge",isDebug?`隔离测试 · ${unitMs} ms/秒 · 无声音`:"隔离测试 · 真实秒长与声音"); }
-      const snapshot = store.loadProgress();
-      if (snapshot !== null) {
-        if (!engine.restore(snapshot)) showMessage("storageMessage","进度无法恢复，历史保留。");
-        else {
-          const existing = history.find(record => record.id===engine.id);
-          if (existing) {
-            engine.index=plan.length-1; engine.remaining=0; engine.state="finished"; engine.completion=existing;
-            savedCompletion=true; store.saveProgress(null);
-          } else if (engine.state==="finished") finishSave();
+      function restoreProgress() {
+        const snapshot = store.loadProgress();
+        if (snapshot !== null) {
+          if (!engine.restore(snapshot)) showMessage("storageMessage","进度无法恢复，历史保留。");
+          else {
+            const existing = history.find(record => record.id===engine.id);
+            if (existing) {
+              engine.index=plan.length-1; engine.remaining=0; engine.state="finished"; engine.completion=existing;
+              savedCompletion=true; store.saveProgress(null);
+            } else if (engine.state==="finished") finishSave();
+          }
         }
       }
-      render(); renderCalendar();
+      restoreProgress(); render(); renderCalendar();
+      function chooseProgram(nextProgram) {
+        if (program === nextProgram) return;
+        // Stop and discard an unfinished attempt before changing which plan owns the screen.
+        if (engine.state === "finished" && !savedCompletion) {
+          showMessage("storageMessage","打卡尚未保存，请重试保存后切换计划。"); return;
+        }
+        if (engine.state !== "finished" && engine.state !== "idle" && !store.saveProgress(null)) {
+          pause("进度未清除，请重试切换。",true); render(); return;
+        }
+        clearAudio(); releaseWake(); mediaState("paused");
+        program = nextProgram; stages = programs[program].stages; plan = programs[program].plan;
+        prefix = program === PROGRAM ? basePrefix : `${basePrefix}:joint`;
+        store = new Store(storage,prefix,storageWarning); engine = new Engine(unitMs,program);
+        history = store.history(); savedCompletion = false; lastSave = ""; lastLane = "";
+        resumePosition = null; resumeStage = -1; $("resetConfirm").hidden = true;
+        showMessage("storageMessage",""); showMessage("runtimeMessage","");
+        $("runningPanel").classList.remove("reveal");
+        for (const [id,selected] of [["originalTab",program===PROGRAM],["jointTab",program===JOINT_PROGRAM]]) {
+          $(id).setAttribute("aria-selected",String(selected)); $(id).tabIndex=selected?0:-1;
+        }
+        $("planContent").setAttribute("aria-labelledby",program===PROGRAM?"originalTab":"jointTab");
+        renderProgramDetails(); restoreProgress(); render(); renderCalendar();
+        log("plan-selected",{program});
+      }
+      for (const [id,value] of [["originalTab",PROGRAM],["jointTab",JOINT_PROGRAM]]) {
+        $(id).addEventListener("click",() => chooseProgram(value));
+        $(id).addEventListener("keydown",event => {
+          if (!["ArrowLeft","ArrowRight","Home","End"].includes(event.key)) return;
+          event.preventDefault(); const target = event.key==="Home"?PROGRAM:event.key==="End"?JOINT_PROGRAM:program===PROGRAM?JOINT_PROGRAM:PROGRAM;
+          chooseProgram(target); $(target===PROGRAM?"originalTab":"jointTab").focus();
+        });
+      }
       // Read-only observability: no bypass/complete hooks in either production or test mode.
       window.__rehabTimer = {
-        config: { debug:isDebug, test:isTest, unitMs, prefix, totalSeconds:plan.reduce((n,p)=>n+p.seconds,0) }, events,
+        get config() { return { debug:isDebug, test:isTest, unitMs, prefix, program, totalSeconds:plan.reduce((n,p)=>n+p.seconds,0) }; }, events,
         getPlan: () => plan.map(p=>({...p})),
         getState: () => ({ ...engine.snapshot(), runState:engine.state, savedCompletion, soundEnabled, mediaState:speaker.failed?"unavailable":$("cueAudio").paused?"paused":"playing", mediaJob:speaker.job?.key || null, pendingBeep, historyCount:history.length })
       };
