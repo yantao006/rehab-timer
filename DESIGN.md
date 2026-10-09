@@ -98,9 +98,11 @@ Phase, group, repetition, and remaining time must be understandable in one glanc
 
 The page is a centered full-height lane between two rope markers.
 Idle mode places one compact full-width Start block directly below the five-stage progress.
+A two-tab plan selector sits above the progress; switching plans changes the routine and calendar together without changing the page's visual identity.
 There is no promise headline, formula subtitle, introductory paragraph, or placeholder for removed copy.
 Running mode splits the scoreboard into a dark phase bay and a dominant clock field, then linearizes those zones below 700px.
 The same scoreboard shows the initial preparation countdown before any repetition becomes active.
+On the new plan's fifth stage it shows 「8–10 次 / 组 · 不计时」 instead of a countdown, with an explicit 「完成」 control for each group.
 Five numbered stage points stay above it, followed by the unabridged exercise identity and equipment.
 The shared action-details disclosure holds dosage without repeating it above the active clock.
 The next-stage ready screen keeps a stationary upcoming duration and puts the explicit continue action inside the clock field, not below the fold after the progress lanes.
@@ -137,6 +139,7 @@ Five numbered stage points express the top-level sequence; they are a non-intera
 Completed points are pool teal with an explicit completed label, the current point is orange, and pending points remain foam white.
 Short progress labels supplement full accessible names and the untruncated current-stage heading.
 Within stages 1-4, two labeled rows of six split-time cells map that stage's groups exactly.
+The new plan's fifth stage instead has two labeled rows of one manual-completion cell each.
 Within stage 5, eight cells map four alternating work/stretch rounds.
 Completed cells turn pool teal, the active action cell turns orange and grows vertically, and pending cells remain foam white.
 A repetition becomes complete as soon as its work interval ends, including during the following short rest and during group rest.
@@ -144,7 +147,7 @@ A repetition becomes complete as soon as its work interval ends, including durin
 ### Timing Controls
 
 During the initial 30-second preparation window only, a teal pill labeled 「跳过准备」 sits beside Pause and End.
-During a 60-second group rest only, 「跳过休息」 occupies the same secondary-control vocabulary.
+Only the original plan's 60-second group rest shows 「跳过休息」; the new plan's 60-second stage rest does not.
 Neither control can skip work or short repetition rests.
 Pause has a distinct stopped state and preserves the remaining interval time.
 Ready and paused states place their orange Continue action inside the dark scoreboard with a foam focus outline.
@@ -158,7 +161,7 @@ The confirmation has clear commit/cancel choices and deliberate keyboard focus.
 
 ### Calendar and Warnings
 
-The calendar is a simple seven-column grid with Monday first, month navigation and no decorative achievement cards.
+Each plan has its own simple seven-column calendar with Monday first, month navigation and no decorative achievement cards.
 Completed dates use pool teal with white text; today has a dark outline and the word 「今天」, including on a completed date.
 Multiple full sessions on a day still produce one marked date, while the weekly summary counts sessions against 3-4 per week.
 Calendar dates are compact editable local check-ins with a separate date field and explicit mark/cancel actions.
