@@ -281,9 +281,12 @@
       const jointPlan = Object.freeze((() => {
         const items = [{ stage: 0, kind: "prep", seconds: 30 }];
         for (let stage = 0; stage < 4; stage++) {
-          for (let group = 1; group <= 2; group++) for (let rep = 1; rep <= 6; rep++) {
-            items.push({ stage, group, rep, kind: "work", seconds: 15 });
-            if (group === 1 || rep < 6) items.push({ stage, group, rep, kind: "rest", seconds: 5 });
+          for (let group = 1; group <= 2; group++) {
+            for (let rep = 1; rep <= 6; rep++) {
+              items.push({ stage, group, rep, kind: "work", seconds: 15 });
+              if (rep < 6) items.push({ stage, group, rep, kind: "rest", seconds: 5 });
+            }
+            if (group === 1) items.push({ stage, group, rep: 6, kind: "group-rest", seconds: 60 });
           }
           items.push({ stage, kind: "stage-rest", seconds: 60 });
         }
@@ -1052,7 +1055,7 @@
           const line = document.createElement("li");
           line.textContent = program === PROGRAM
             ? `${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"15 秒训练 / 5 秒重复间休息，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮，无额外休息。"}`
-            : `${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"每次 15 秒，休息 5 秒，6 次 × 2 组；两组之间休息 5 秒，节间休息 1 分钟。":"每组 8 到 10 次，共 2 组，逐组点击「完成」，不计时。"}`;
+            : `${stage.name}${stage.equipment?`，${stage.equipment}`:""}。${i<4?"每次 15 秒，休息 5 秒，6 次 × 2 组；组间休息 60 秒，可跳过；每组末次不加短休，节间休息 1 分钟。":"每组 8 到 10 次，共 2 组，逐组点击「完成」，不计时。"}`;
           $("routineList").append(line);
         });
       }

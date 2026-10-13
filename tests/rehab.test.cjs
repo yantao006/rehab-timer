@@ -84,6 +84,60 @@ for (let stage = 0; stage < 4; stage++) test(`第 ${stage+1} 项：12 次训练�
   }
   assert.deepEqual(actual.map(p => [p.group,p.rep,p.kind,p.seconds]),expected);
 });
+test('下肢前四节末次直接60秒组休或节休，原计划组休不变，第五节仍手动完成', () => {
+  const { JOINT_PROGRAM, jointPlan } = context.RehabCore;
+  const e = new Engine(1000, JOINT_PROGRAM);
+  assert.equal(e.start(ID),true); assert.equal(e.arm(0),true);
+  let waits = 0;
+  while (e.interval.stage < 4) {
+    const old = e.interval;
+    const end = e.deadline;
+    const result = exhaust(e);
+    if (old.kind === 'work' && old.rep === 6) {
+      assert.equal(e.interval.kind,old.group === 1 ? 'group-rest' : 'stage-rest');
+      assert.equal(e.interval.seconds,60);
+      assert.equal(e.interval.stage,old.stage);
+    }
+    if (old.kind === 'group-rest') {
+      assert.deepEqual([e.interval.stage,e.interval.group,e.interval.rep,e.interval.kind], [old.stage,2,1,'work']);
+    }
+    if (result === 'cue') e.arm(end);
+    if (result === 'ready') {
+      waits++;
+      assert.equal(old.kind,'stage-rest');
+      assert.equal(e.completion,null);
+      assert.equal(e.tick(end+60000),null);
+      assert.equal(e.state,'ready');
+      e.continue();
+      if (e.interval.kind !== 'manual') e.arm(end);
+      else e.state = 'manual'; // The page controller enters manual mode after explicit continuation.
+    }
+  }
+  assert.equal(waits,4);
+  for (let stage = 0; stage < 4; stage++) {
+    const actual = jointPlan.filter(p => p.stage === stage && !['prep','stage-rest'].includes(p.kind));
+    const original = plan.filter(p => p.stage === stage && p.kind !== 'prep');
+    assert.deepEqual(plain(actual.map(({group,rep,kind,seconds})=>({group,rep,kind,seconds}))),
+      plain(original.map(({group,rep,kind,seconds})=>({group,rep,kind,seconds}))));
+    assert.equal(actual.filter(p => p.kind === 'group-rest').length,1);
+    assert.equal(actual.filter(p => p.kind === 'rest').length,10);
+    assert.equal(jointPlan.filter(p => p.stage === stage && p.kind === 'stage-rest').length,1);
+  }
+  assert.deepEqual(plain(jointPlan.filter(p => p.stage === 4).map(p => [p.group,p.kind,p.seconds])), [[1,'manual',0],[2,'manual',0]]);
+  assert.equal(e.state,'manual');
+  assert.equal(e.completeManual(FINISH),'manual'); assert.equal(e.completion,null);
+  assert.equal(e.completeManual(FINISH),'finished'); assert.equal(e.completion.date,localDate(FINISH));
+});
+test('下肢组休可跳过到同节第二组，节间休息不能跳过', () => {
+  const e = new Engine(1000,context.RehabCore.JOINT_PROGRAM);
+  e.start(ID); e.arm(0); seekGroupRest(e);
+  assert.equal(e.skip('group-rest',e.lastNow+100),true);
+  assert.deepEqual([e.interval.stage,e.interval.group,e.interval.rep,e.interval.kind], [0,2,1,'work']);
+  e.arm(e.lastNow+100);
+  while (e.interval.kind !== 'stage-rest') exhaust(e);
+  assert.equal(e.skip('stage-rest',e.lastNow+100),false);
+  assert.equal(e.completion,null);
+});
 test('第五项四轮踮脚/拉伸自动交替，无休息或手动等待插入', () => {
   const { seen } = finishAll();
   assert.deepEqual(seen.filter(p => p.stage === 4).map(p => [p.round,p.kind,p.action,p.seconds]), [
