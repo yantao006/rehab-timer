@@ -184,3 +184,44 @@ test('另存冲突完成时本地终态写失败，重试复用持久意图且�
   assert.equal((await stateResponse(env)).records.length, 1, 'Retrying the same copy intent cannot add another completed training.');
   assert.equal(first.repo.conflicts().length, 0);
 });
+
+test('旧第5项中途快照规范化上传与接管，保留剩余时间和原始备份', async () => {
+  const env=environment(),first=await unlocked(env);
+  const old={...first.snapshot('legacy-round-two-001'),index:95,remaining:12500,state:'running'}; delete old.planRevision;
+  first.storage.setItem('rehab-timer:v1:progress',JSON.stringify(old));
+  const preview=first.repo.scanLegacy(),result=await first.repo.importLegacy(preview); assert.equal(result.ok,true);
+  const sent=first.network.calls.find(call=>call.data?.type==='import').data.progress[0].snapshot;
+  assert.equal(sent.planRevision,2); assert.equal(sent.index,96); assert.equal(sent.remaining,12500);
+  const other=await unlocked(env),claimed=await other.repo.claimSession(old.id,first.core.PROGRAM);
+  assert.equal(claimed.planRevision,2); assert.equal(claimed.index,96); assert.equal(claimed.state,'paused'); assert.equal(claimed.remaining,12500);
+  const backup=JSON.parse(first.repo.backupLegacy()); assert.deepEqual(JSON.parse(backup.entries[0].value),old);
+  assert.equal(first.storage.getItem('rehab-timer:v1:progress'),JSON.stringify(old));
+});
+
+test('旧index100终态和同ID历史导入只保留一次完成，日期不改且重试幂等', async () => {
+  const env=environment(),f=await unlocked(env);
+  const old={...f.finish('legacy-finished-final-001'),index:100}; delete old.planRevision;
+  f.storage.setItem('rehab-timer:v1:progress',JSON.stringify(old));
+  f.storage.setItem(`rehab-timer:v1:done:${old.id}`,JSON.stringify(old.completion));
+  const preview=f.repo.scanLegacy(); assert.equal(preview.progress[0].snapshot.index,103); assert.equal(preview.progress[0].snapshot.planRevision,2);
+  assert.deepEqual(plain(preview.progress[0].snapshot.completion),old.completion);
+  const result=await f.repo.importLegacy(preview); assert.equal(result.ok,true); await f.repo.importLegacy(f.repo.scanLegacy());
+  const state=await stateResponse(env); assert.equal(state.records.length,1); assert.equal(state.records[0].date,old.completion.date); assert.equal(state.records[0].finishedAt,old.completion.finishedAt);
+  const session=state.sessions.find(item=>item.id===old.id); assert.equal(session.status,'completed'); assert.equal(session.snapshot.planRevision,2); assert.equal(session.snapshot.index,103);
+  assert.equal(f.storage.getItem('rehab-timer:v1:progress'),JSON.stringify(old));
+});
+
+test('升级后原样重放已冻结的旧排程请求，不重写operationId或请求内容', async () => {
+  const env=environment(),f=await unlocked(env),id='legacy-frozen-op-session';
+  const snapshot={...f.snapshot(id),index:99,remaining:19000,state:'paused'}; delete snapshot.planRevision;
+  const writerToken='legacy-frozen-writer-token-0000000000000000001';
+  const request={operationId:'legacy-frozen-create-operation',type:'create',program:f.core.PROGRAM,sessionId:id,snapshot,writerToken};
+  f.network.drop='create';
+  await assert.rejects(f.network.fetch('/api/operation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)}),/response lost/);
+  f.storage.setItem(`${f.repo.prefix}:owner:${f.core.PROGRAM}:${id}`,JSON.stringify({revision:0,writerEpoch:1,writerToken}));
+  f.storage.setItem(`${f.repo.prefix}:op:${request.operationId}`,JSON.stringify({id:request.operationId,type:'create',program:f.core.PROGRAM,sessionId:id,createdAt:NOW,sequence:1,owner:'legacy-tab-owner',payload:{program:f.core.PROGRAM,sessionId:id,snapshot,writerToken},request}));
+  const reload=await unlocked(env,{storage:f.storage,network:f.network});
+  const replay=f.network.calls.filter(call=>call.data?.operationId===request.operationId).at(-1).data;
+  assert.deepEqual(replay,request); assert.equal(reload.repo.status().pending,0);
+  const sessions=reload.repo.sessions(); assert.equal(sessions.length,1); assert.equal(sessions[0].snapshot.planRevision,2); assert.equal(sessions[0].snapshot.index,102);
+});

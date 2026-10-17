@@ -74,79 +74,151 @@
       const trackMedia = $("cueAudio");
       let activeTrack = null;
       let trackStage = -1, resumePosition = null, resumeStage = -1;
+      let trackGuard = null, trackWatchdog = null;
+      const stageSources = new Map();
+      const TRACK_LOAD_TIMEOUT = 12000, TRACK_PROGRESS_TIMEOUT = 8000, POSITION_TOLERANCE = .08;
+      const stageSource = (stage,selectedProgram) => selectedProgram === PROGRAM ? `audio/stage-${stage+1}.mp3` : `audio/stage-joint-${stage+1}.mp3`;
+      function loadSeekableStage(stage,selectedProgram) {
+        const src=stageSource(stage,selectedProgram);
+        if(location.protocol==="file:")return Promise.resolve(src);
+        if(stageSources.has(src))return stageSources.get(src).promise;
+        const entry={url:null,promise:null};
+        const controller=typeof AbortController==="function"?new AbortController():null;
+        let timeout;
+        const load=Promise.resolve().then(async()=>{
+          const response=await fetch(src,controller?{signal:controller.signal}:{});
+          if(!response.ok)throw new Error("stage-resource");
+          const blob=await response.blob();
+          if(!blob.size)throw new Error("stage-empty");
+          return blob;
+        });
+        const deadline=new Promise((_,reject)=>{timeout=setTimeout(()=>{controller?.abort();reject(new Error("stage-timeout"));},TRACK_LOAD_TIMEOUT);});
+        entry.promise=Promise.race([load,deadline]).then(blob=>{
+          clearTimeout(timeout);entry.url=URL.createObjectURL(blob);log("track-cached",{stage,bytes:blob.size});return entry.url;
+        }).catch(error=>{clearTimeout(timeout);stageSources.delete(src);throw error;});
+        stageSources.set(src,entry);return entry.promise;
+      }
       function mediaState(state) {
         if (navigator.mediaSession) navigator.mediaSession.playbackState = state;
       }
-      function syncTrack() {
-        if (!activeTrack || !["cue","running"].includes(engine.state)) return;
-        const position = trackMedia.currentTime, track = activeTrack;
-        if (!Number.isFinite(position)) return;
-        if (position >= track.end) {
-          // Let the new plan's short "下一项" finish before releasing its stage track.
-          if (program === JOINT_PROGRAM && position < track.duration-.25) return;
-          const finishedStage = trackStage;
-          activeTrack = null;
-          if (finishedStage === 4 && program === PROGRAM) {
-            engine.index = plan.length-1; engine.remaining = 0; engine.state = "finished";
-            const date = new Date();
-            engine.completion = {version:1,id:engine.id,date:localDate(date),finishedAt:date.toISOString()};
-            finishSave();
-          } else {
-            engine.index = track.entries[track.entries.length-1].index+1;
-            engine.remaining = engine.interval.seconds*unitMs; engine.state = "ready";
-            checkpoint(true); render();
-          }
-          releaseWake(); mediaState("paused"); log("track-boundary",{stage:finishedStage});
-          return;
-        }
-        const entry = track.entries.find(e => position < e.end);
-        const changed = engine.index !== entry.index;
-        engine.index = entry.index;
-        engine.remaining = Math.min(engine.interval.seconds,entry.end-position)*1000;
-        engine.state = position < entry.start ? "cue" : "running";
-        engine.lastNow = clock(); engine.deadline = engine.lastNow+engine.remaining;
-        if (changed) log("track-interval",{index:entry.index,position,hidden:document.hidden});
-        checkpoint(); render();
+      function trackIntent(resuming=false) {
+        const stage=engine.interval.stage,track=stageTrack(stage,program),entry=track.entries.find(item=>item.index===engine.index);
+        const fresh=engine.remaining===engine.interval.seconds*unitMs;
+        const cue=cueFor(engine.interval,engine.index===1||entry===track.entries[0],program);
+        const position=resuming&&resumeStage===stage&&Number.isFinite(resumePosition)
+          ?resumePosition
+          :resuming||!fresh?entry.end-engine.remaining/1000:Math.max(0,entry.start-cues[cue][1]/1000-.25);
+        return {stage,program,track,entry,index:engine.index,fresh,position,snapshot:engine.snapshot()};
       }
-      function startTrack() {
-        clearAudio(); playbackSession();
-        trackStage = engine.interval.stage; activeTrack = stageTrack(trackStage,program);
-        const entry = activeTrack.entries.find(e => e.index === engine.index);
-        const fresh = engine.remaining === engine.interval.seconds*unitMs;
-        const key = cueFor(engine.interval,engine.index===1 || entry===activeTrack.entries[0],program);
-        const position = resumeStage === trackStage && Number.isFinite(resumePosition)
-          ? resumePosition
-          : fresh ? Math.max(0,entry.start-cues[key][1]/1000-.25) : entry.end-engine.remaining/1000;
-        resumePosition = null; resumeStage = -1;
-        const src = program === PROGRAM ? `audio/stage-${trackStage+1}.mp3` : `audio/stage-joint-${trackStage+1}.mp3`;
-        trackMedia.src = src; speaker.loadedKey = null;
-        trackMedia.muted = !soundEnabled;
-        // Set the seek before play; metadata fallback retains the same gesture-started playback.
-        const token = generation;
-        trackMedia.onloadedmetadata = () => {
-          if (token===generation && activeTrack) trackMedia.currentTime = position;
-        };
-        try { trackMedia.currentTime = position; } catch { /* Metadata callback applies it. */ }
-        try {
-          trackMedia.play()?.catch(() => {
-            if (token!==generation) return;
-            pause("声音未播放，请重试声音后继续。"); soundMessage("声音未播放，请重试声音。");
-          });
-        } catch { pause("声音未播放，请重试声音后继续。"); }
-        if (navigator.mediaSession) {
-          try { navigator.mediaSession.metadata = new MediaMetadata({title:"康复训练计时器",artist:stages[trackStage].short}); } catch { /* Optional. */ }
+      function failTrack(reason) {
+        const guard=trackGuard;
+        if(!guard)return;
+        // Never derive recovery from a media position that failed validation.
+        const snapshot=guard.snapshot,position=guard.confirmed?guard.lastPosition:guard.position;
+        activeTrack=null;trackGuard=null;clearAudio();
+        engine.restore(snapshot);engine.reason=reason;resumePosition=position;resumeStage=guard.stage;
+        mediaState("paused");releaseWake();checkpoint(true);render();soundMessage(reason);
+        log("track-position-rejected",{index:engine.index,position,reason});
+      }
+      function watchTrackProgress() {
+        clearTimeout(trackWatchdog);
+        const guard=trackGuard;
+        if(!guard)return;
+        trackWatchdog=setTimeout(()=>{
+          if(trackGuard!==guard)return;
+          syncTrack();
+          if(trackGuard===guard&&clock()-guard.lastProgressAt>=TRACK_PROGRESS_TIMEOUT)failTrack("音轨未能定位或继续播放，进度已保留，请重试后继续。");
+          else if(trackGuard===guard)watchTrackProgress();
+        },TRACK_PROGRESS_TIMEOUT);
+      }
+      function syncTrack() {
+        const track=activeTrack,guard=trackGuard;
+        if(!track||!guard||!["cue","running"].includes(engine.state)||!guard.playing)return;
+        let position=trackMedia.currentTime;
+        const now=clock();
+        if(!Number.isFinite(position))return;
+        if(!guard.confirmed){
+          // Some browsers first report zero while a nonzero seek is still pending.
+          // Keep the original interval until the target is actually reached.
+          if(position<guard.position-POSITION_TOLERANCE)return;
+          const permittedAdvance=Math.max(0,(now-guard.playingAt)/1000)+.35;
+          if(position>guard.position+permittedAdvance){failTrack("音轨定位发生跳跃，进度已保留，请重试后继续。");return;}
+          // Decoder rounding must never add time back to a restored interval.
+          position=Math.max(position,guard.position);
+          guard.confirmed=true;guard.lastPosition=position;guard.lastObservedAt=now;guard.lastProgressAt=now;
+          log("track-position-confirmed",{index:guard.index,position,target:guard.position});
+        }else{
+          const advance=position-guard.lastPosition,elapsed=(now-guard.lastObservedAt)/1000;
+          if(advance< -POSITION_TOLERANCE||elapsed<0||advance>elapsed+.35){failTrack("音轨位置异常，进度已保留，请重试后继续。");return;}
+          if(advance<0)return;
+          if(advance>.001)guard.lastProgressAt=now;
+          guard.lastPosition=position;guard.lastObservedAt=now;
         }
-        mediaState("playing"); render(); checkpoint(true); requestWake(token);
-        log("track-start",{stage:trackStage,position});
+        if(position>=track.end){
+          // Let the new plan's short "下一项" finish before releasing its stage track.
+          if(program===JOINT_PROGRAM&&position<track.duration-.25)return;
+          const finishedStage=trackStage;activeTrack=null;trackGuard=null;clearTimeout(trackWatchdog);trackWatchdog=null;
+          if(finishedStage===4&&program===PROGRAM){
+            engine.index=plan.length-1;engine.remaining=0;engine.state="finished";
+            const date=new Date();engine.completion={version:1,id:engine.id,date:localDate(date),finishedAt:date.toISOString()};finishSave();
+          }else{
+            engine.index=track.entries[track.entries.length-1].index+1;engine.remaining=engine.interval.seconds*unitMs;engine.state="ready";checkpoint(true);render();
+          }
+          releaseWake();mediaState("paused");log("track-boundary",{stage:finishedStage});return;
+        }
+        let entry=track.entries.find(item=>position<item.end);
+        // The spoken cue for a skipped rest can overlap the previous interval.
+        // Play that cue, but never put the engine back into the skipped interval.
+        if(entry.index<guard.index&&position<guard.entry.start)entry=guard.entry;
+        if(entry.index<engine.index){failTrack("音轨位置回退，进度已保留，请重试后继续。");return;}
+        const changed=engine.index!==entry.index;
+        engine.index=entry.index;engine.remaining=Math.min(engine.interval.seconds,entry.end-position)*1000;
+        engine.state=position<entry.start?"cue":"running";engine.lastNow=now;engine.deadline=now+engine.remaining;
+        guard.snapshot=engine.snapshot();
+        if(changed)log("track-interval",{index:entry.index,position,hidden:document.hidden});
+        checkpoint();render();
+      }
+      function startTrack(intent=trackIntent(),source=null) {
+        clearAudio();playbackSession();
+        trackStage=intent.stage;activeTrack=intent.track;
+        const originalSource=stageSource(intent.stage,intent.program);
+        const src=source||stageSources.get(originalSource)?.url||originalSource;
+        const token=generation;
+        const guard={...intent,confirmed:false,playing:false,playingAt:clock(),lastPosition:intent.position,lastObservedAt:clock(),lastProgressAt:clock()};
+        trackGuard=guard;resumePosition=null;resumeStage=-1;
+        trackMedia.src=src;speaker.loadedKey=null;trackMedia.muted=!soundEnabled;
+        trackMedia.playbackRate=1;
+        const applyPosition=()=>{
+          if(token!==generation||trackGuard!==guard||guard.confirmed)return;
+          try{trackMedia.currentTime=intent.position;}catch{ /* Metadata or seeked can settle the same requested position. */ }
+        };
+        trackMedia.onloadedmetadata=applyPosition;
+        trackMedia.onseeked=()=>{if(token===generation&&trackGuard===guard)syncTrack();};
+        applyPosition();
+        try{
+          // New stages still call play synchronously in the initiating user gesture.
+          trackMedia.play()?.catch(()=>{if(token===generation)failTrack("声音未播放，进度已保留，请重试声音后继续。");});
+        }catch{failTrack("声音未播放，进度已保留，请重试声音后继续。");}
+        if(trackGuard!==guard)return;
+        if(navigator.mediaSession){try{navigator.mediaSession.metadata=new MediaMetadata({title:"康复训练计时器",artist:stages[trackStage].short});}catch{ /* Optional. */ }}
+        mediaState("playing");render();checkpoint(true);requestWake(token);watchTrackProgress();
+        log("track-start",{stage:trackStage,position:intent.position,seekableSource:src!==originalSource});
+        // Prepare a fully loaded source for later nonzero positioning. This does
+        // not delay the gesture-started playback and does not depend on HTTP Range behavior.
+        loadSeekableStage(intent.stage,intent.program).catch(()=>log("track-cache-unavailable",{stage:intent.stage}));
       }
       trackMedia.addEventListener("timeupdate",syncTrack);
       trackMedia.addEventListener("ended",syncTrack);
-      trackMedia.addEventListener("playing",() => { if (activeTrack) { soundMessage(""); log("track-playing",{position:trackMedia.currentTime}); } });
-      trackMedia.addEventListener("pause",() => {
-        if (activeTrack && trackMedia.paused && !trackMedia.ended) pause("媒体已暂停，请确认后继续。");
+      trackMedia.addEventListener("playing",()=>{
+        const guard=trackGuard;if(!activeTrack||!guard)return;
+        if(!guard.playing){guard.playing=true;guard.playingAt=clock();}
+        soundMessage("");log("track-playing",{position:trackMedia.currentTime});syncTrack();
       });
-      trackMedia.addEventListener("error",() => { if (activeTrack) pause("音轨加载失败，请重试声音后继续。"); });
-      trackMedia.addEventListener("waiting",() => { if (activeTrack) soundMessage("音轨缓冲中，计时随声音等待。"); });
+      trackMedia.addEventListener("pause",()=>{
+        if(activeTrack&&trackMedia.paused&&!trackMedia.ended)pause("媒体已暂停，请确认后继续。");
+      });
+      trackMedia.addEventListener("error",()=>{if(activeTrack)failTrack("音轨加载失败，进度已保留，请重试声音后继续。");});
+      trackMedia.addEventListener("waiting",()=>{if(activeTrack)soundMessage("音轨缓冲中，计时随声音等待。");});
       if (navigator.mediaSession) {
         for (const [action,handler] of Object.entries({
           pause:() => pause(), stop:() => pause(),
@@ -154,7 +226,8 @@
         })) try { navigator.mediaSession.setActionHandler(action,handler); } catch { /* Optional. */ }
       }
       function clearAudio() {
-        activeTrack = null; trackMedia.onloadedmetadata = null;
+        activeTrack = null; trackGuard = null; trackMedia.onloadedmetadata = null; trackMedia.onseeked = null;
+        clearTimeout(trackWatchdog); trackWatchdog = null;
         try { trackMedia.pause(); } catch { /* Media may already be detached. */ }
         generation++; clearTimeout(timer); timer = null;
         speaker.cancel();
@@ -269,9 +342,9 @@
     const root=$("laneProgress");root.replaceChildren();
     const groups=item.stage===4&&program===PROGRAM?[1]:[1,2];
     for(const group of groups){
-      const label=document.createElement("span");label.className="lane-label";label.textContent=item.stage===4&&program===PROGRAM?"四轮交替":`第 ${group} 组`;
+      const label=document.createElement("span");label.className="lane-label";label.textContent=item.stage===4&&program===PROGRAM?"四轮动作":`第 ${group} 组`;
       const cells=document.createElement("div");cells.className="lane-cells";
-      const works=plan.filter(p=>p.stage===item.stage&&((program===PROGRAM&&item.stage===4)||(p.group===group&&["work","manual"].includes(p.kind))));
+      const works=plan.filter(p=>p.stage===item.stage&&(program===PROGRAM&&item.stage===4?["work","stretch"].includes(p.kind):p.group===group&&["work","manual"].includes(p.kind)));
       cells.style.gridTemplateColumns=`repeat(${works.length},minmax(0,1fr))`;
       for(const work of works){const cell=document.createElement("span");cell.className="lane-cell";cell.setAttribute("aria-hidden","true");cell.dataset.state=engine.state==="finished"||work.index<engine.index?"complete":work.index===engine.index&&!["ready","cue"].includes(engine.state)?"active":"pending";cells.append(cell);}root.append(label,cells);
     }
@@ -279,7 +352,7 @@
   function nextText(){
     const item=engine.interval,next=plan[engine.index+1];if(!next)return "接着：完成";
     if(next.stage!==item.stage)return "接着：下一项就位";if(item.kind==="prep")return `接着：${stages[0].short}`;
-    if(program===PROGRAM&&next.stage===4)return `接着：${next.kind==="stretch"?"拉伸":"踮脚"}`;
+    if(program===PROGRAM&&next.stage===4)return `接着：${next.kind==="round-rest"?"轮间休息":next.kind==="stretch"?"拉伸":"踮脚"}`;
     if(item.kind==="manual")return "完成本组后，准备下一组";
     return `接着：${next.kind==="stage-rest"?"节间休息":next.kind==="group-rest"?"组间休息":next.kind==="rest"?"休息":"训练"}`;
   }
@@ -307,10 +380,10 @@
     stagePoints();text("trainingPlanLabel",`${program===PROGRAM?"原计划":"下肢关节居家训练"} · ${item.stage+1}/5 项`);
     showMessage("runtimeMessage",state==="paused"?engine.reason:"");
     text("exerciseName",stages[item.stage].name);text("exerciseMeta",stages[item.stage].equipment?`器材：${stages[item.stage].equipment}`:"");$("exerciseMeta").hidden=!stages[item.stage].equipment;
-    const phase=program===PROGRAM&&item.stage===4&&item.kind==="work"?"踮脚":{prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息","stage-rest":"节间休息",manual:"训练",stretch:"拉伸"}[item.kind];
+    const phase=program===PROGRAM&&item.stage===4&&item.kind==="work"?"踮脚":{prep:"准备",work:"训练",rest:"休息","group-rest":"组间休息","round-rest":"轮间休息","stage-rest":"节间休息",manual:"训练",stretch:"拉伸"}[item.kind];
     $("scoreboard").dataset.state=state;$("positionCopy").hidden=state==="finished";
     text("phaseName",state==="ready"?(manualReady?"下一组就位":"下一项就位"):state==="paused"?"已暂停":state==="cue"?"准备开始":phase);
-    text("positionCopy",item.kind==="manual"?`第 ${item.group}/2 组 · 8 到 10 次`:program===PROGRAM&&item.stage===4?`第 ${item.round}/4 轮`:item.kind==="prep"?"第一项尚未开始":item.kind==="stage-rest"?"下一节即将开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${["rest","group-rest"].includes(item.kind)?"已完成":""}`);
+    text("positionCopy",item.kind==="manual"?`第 ${item.group}/2 组 · 8 到 10 次`:program===PROGRAM&&item.stage===4?`第 ${item.round}/4 轮${item.kind==="round-rest"?"已完成":""}`:item.kind==="prep"?"第一项尚未开始":item.kind==="stage-rest"?"下一节即将开始":`第 ${item.group}/2 组 · 第 ${item.rep}/6 次${["rest","group-rest"].includes(item.kind)?"已完成":""}`);
     text("countdown",item.kind==="manual"?"8-10":String(Math.max(0,Math.ceil(engine.remaining/unitMs-1e-6))));
     text("countdownUnit",state==="ready"?(item.kind==="manual"?"次 / 组 · 确认后开始":"秒 · 确认后开始"):item.kind==="manual"?"次 / 组 · 不计时":state==="cue"?"秒 · 提示音后计时":state==="paused"?"秒 · 剩余时间已保留":"秒");
     $("nextCue").hidden=["finished","ready","paused"].includes(state);text("nextCue",nextText());
@@ -318,7 +391,8 @@
     $("continueButton").disabled=conflicted;$("completeButton").disabled=conflicted;
     $("continueButton").hidden=!["paused","ready"].includes(state);text("continueButton",state==="ready"?(manualReady?"准备好了，开始第 2 组":"准备好了，开始下一项"):"继续训练");
     $("pauseButton").hidden=!["running","cue"].includes(state);$("completeButton").hidden=state!=="manual";$("manualPauseButton").hidden=state!=="manual";text("completeButton",`完成第 ${item.group||1} 组`);
-    $("skipPrepButton").hidden=state!=="running"||item.kind!=="prep";$("skipRestButton").hidden=state!=="running"||item.kind!=="group-rest";
+    $("skipPrepButton").hidden=state!=="running"||item.kind!=="prep";$("skipRestButton").hidden=state!=="running"||!["group-rest","round-rest"].includes(item.kind);
+    text("skipRestButton",item.kind==="round-rest"?"跳过轮间休息":"跳过休息");
     $("finishedRecordsButton").hidden=state!=="finished";$("finishedHomeButton").hidden=state!=="finished";
     for(const id of ["soundButton","testSoundButton","resetButton"])$(id).hidden=state==="finished";
     $("normalActions").hidden=!$("resetConfirm").hidden;
@@ -335,8 +409,10 @@
       function pause(reason="", conservative=false) {
         if (activeTrack) {
           syncTrack();
-          resumePosition = trackMedia.currentTime;
-          resumeStage = trackStage;
+          if(trackGuard){
+            resumePosition=trackGuard.confirmed?trackGuard.lastPosition:trackGuard.position;
+            resumeStage=trackGuard.stage;
+          }
         }
         if (!engine.pause(conservative && engine.state==="running"?engine.lastNow:clock())) return;
         engine.reason = reason; clearAudio(); mediaState("paused"); releaseWake(); checkpoint(true); render();
@@ -348,18 +424,37 @@
             clearAudio(); playbackSession(); engine.state = "manual";
             checkpoint(true); render(); speak(cueFor(engine.interval,true,program),gesture); return;
           }
-          if (resuming) {
-            if (!Number.isFinite(resumePosition)) {
-              const track = stageTrack(engine.interval.stage,program);
-              const entry = track.entries.find(e => e.index === engine.index);
-              resumePosition = entry.end-engine.remaining/1000; resumeStage = engine.interval.stage;
+          const intent=trackIntent(resuming);
+          if(resuming||intent.position>POSITION_TOLERANCE){
+            // The short cue below already announces this interval. If its work has
+            // not begun, join the zero beep instead of replaying an old announcement.
+            // Once work has begun, preserve the exact partial-interval position.
+            if(intent.fresh){
+              const zeroLead=Math.max(0,intent.entry.start-.25);
+              if(!resuming||intent.position<zeroLead)intent.position=zeroLead;
             }
-            clearAudio(); playbackSession();
-            const token = generation, playing = speak(cueFor(engine.interval,true,program),gesture);
-            render(); checkpoint(true); await playing;
-            if (token!==generation || engine.state!=="cue") return;
+            clearAudio();playbackSession();
+            const token=generation;
+            resumePosition=intent.position;resumeStage=intent.stage;
+            trackMedia.muted=!soundEnabled;
+            // Even with sound muted, establish media permission synchronously.
+            // Loading the complete stage in parallel avoids browser-specific seek behavior.
+            const playing=speaker.play(cueFor(engine.interval,true,program),gesture);
+            const loading=loadSeekableStage(intent.stage,intent.program);
+            render();checkpoint(true);
+            try{
+              const [result,source]=await Promise.all([playing,loading]);
+              if(token!==generation||engine.state!=="cue")return;
+              if(result!=="ended")throw new Error("cue-unavailable");
+              startTrack(intent,source);
+            }catch{
+              if(token!==generation||engine.state!=="cue")return;
+              pause("音轨未准备好，进度已保留，请重试声音后继续。");
+              soundMessage("音轨未准备好，请重试声音后继续。");
+            }
+            return;
           }
-          startTrack(); return;
+          startTrack(intent);return;
         }
         if (engine.interval.kind === "manual") {
           clearAudio(); engine.state = "manual"; checkpoint(true); render(); log("manual-start",{index:engine.index}); return;
@@ -497,7 +592,7 @@
       point.querySelector(".stage-number").textContent=i+1;point.querySelector(".stage-label").textContent=stage.short;$("stageProgress").append(point);
       const line=document.createElement("li"),name=document.createElement("span"),dose=document.createElement("span");name.className="routine-name";dose.className="routine-dose";
       name.textContent=`${stage.name}${stage.equipment?` · ${stage.equipment}`:""}`;
-      dose.textContent=program===PROGRAM?(i<4?"训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮，无额外休息。"):(i<4?"训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 60 秒可跳过，节间休息 60 秒。":"每组 8 到 10 次，共 2 组。逐组点完成，不计时。");
+      dose.textContent=program===PROGRAM?(i<4?"训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮；前三轮结束后休息 30 秒，可跳过，第 4 轮后直接完成。"):(i<4?"训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 60 秒可跳过，节间休息 60 秒。":"每组 8 到 10 次，共 2 组。逐组点完成，不计时。");
       line.append(name,dose);$("routineList").append(line);
     });
     for(const [id,selected]of [["originalTab",program===PROGRAM],["jointTab",program===JOINT_PROGRAM]]){$(id).setAttribute("aria-selected",String(selected));$(id).tabIndex=selected?0:-1;}
@@ -528,7 +623,10 @@
   }
   function toggleSound(){
     if(!soundEnabled){testSound();return;}
-    soundEnabled=false;trackMedia.muted=true;if(!activeTrack)speaker.cancel();clearTimeout(beepTimer);beepTimer=null;renderSound();soundMessage("");log("sound-off");
+    soundEnabled=false;trackMedia.muted=true;
+    // A muted training cue must finish normally to complete its stage-track handoff.
+    if(!activeTrack&&(isDebug||engine.state!=="cue"))speaker.cancel();
+    clearTimeout(beepTimer);beepTimer=null;renderSound();soundMessage("");log("sound-off");
   }
   $("startButton").addEventListener("click",()=>{
     if(!repository.canStart()){showMessage("startMessage",mode==="cloud"?"开始新的训练前，请先联网并解锁共享记录。已有暂停进度仍可继续。":"本地保存不可用，请检查浏览器存储后重试。");openCloud();return;}
@@ -554,7 +652,9 @@
   });
   for(const id of ["testSoundButton","homeTestSoundButton"])$(id).addEventListener("click",testSound);
   for(const id of ["soundButton","homeSoundButton"])$(id).addEventListener("click",toggleSound);
-  for(const [id,kind]of [["skipPrepButton","prep"],["skipRestButton","group-rest"]])$(id).addEventListener("click",()=>{
+  for(const id of ["skipPrepButton","skipRestButton"])$(id).addEventListener("click",()=>{
+    const kind=engine.interval.kind;
+    if(engine.state!=="running"||(id==="skipPrepButton"?kind!=="prep":!["group-rest","round-rest"].includes(kind)))return;
     if(activeTrack)syncTrack();
     if(engine.skip(kind,clock())){log("rest-skipped",{kind,index:engine.index});enterCue(false,true);}
     else{clearAudio();if(engine.state==="cue")enterCue();else{if(engine.state==="running")pause("阶段已变化，请确认后继续。",true);checkpoint(true);render();}}

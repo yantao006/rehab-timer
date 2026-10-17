@@ -14,7 +14,7 @@
 - `POST /api/logout` 输入 `{}`，成功清除 Cookie。
 - `GET /api/state` 返回 `{ok:true,environment,records,sessions}`。
 - 会话为 `{id,program,status,snapshot,revision,writerEpoch,updatedAt}`，`status` 为 `active`、`completed`、`abandoned`。
-- 快照与训练核心一致：`{version:1,program,unitMs:1000,id,index,remaining,state,completion}`。
+- 快照与训练核心一致：`{version:1,planRevision:2,program,unitMs:1000,id,index,remaining,state,completion}`。
 - `records` 包含撤销记录，以 `{id,program,date,finishedAt,source,timeZone,revoked,revokedAt}` 表示。
 - `source` 为 `training`、`manual`、`legacy`，`finishedAt` 对手工补记可为 null，旧时区用 null。
 - 客户端统计时仅使用 `revoked === false` 的记录。
@@ -78,3 +78,22 @@ operation_log 保存操作摘要和原始成功响应，不能在正常清理中
 本地验证使用真实 SQLite 的外键、CHECK、唯一性和事务回滚，无本地服务器。
 `node --test tests/api.test.mjs tests/integration.test.mjs` 同时检查 API 行为、实际训练计划一致性和浏览器仓储到 API 的完整协议。
 部署后还需要在独立预览 D1 上检查 Pages Functions 绑定、Cookie 和远程事务，不能用本地测试代替线上验证。
+
+## 排程修订与旧快照兼容
+
+planRevision 与记录格式 version 分开管理。
+当前所有新快照输出 planRevision:2，完成记录的 version 仍为 1。
+原计划第五项在前三轮踮脚和拉伸之后各增加 30 秒 round-rest，可明确跳过，第四轮拉伸后直接完成。
+新原计划共 104 段、固定计时 1520 秒；下肢关节计划仍为 99 段。
+
+没有 planRevision 或显式 planRevision:1 的快照，必须先按旧的 101 段原计划校验。
+第五项旧索引 93、94、95、96、97、98、99、100 对应新索引 93、94、96、97、99、100、102、103。
+动作身份、剩余毫秒和原完成日期保持不变，旧动作不能被解释为新增的轮间休息。
+其他原计划索引和全部下肢计划索引不变。
+新版本的索引 95、98、101 则分别表示前三轮轮休，不能再套用旧索引转换。
+未知 planRevision 拒绝恢复与写入，不猜测排程。
+
+浏览器恢复、旧数据导入、服务器已有会话读取、手动接管以及旧操作日志重放均采用这一转换。
+接管或下一次合法写入将保存当前 planRevision，读取不会改变会话版本号或写入权。
+已发送或已持久化的待同步请求必须保留原始请求体和操作 ID，由服务端识别旧排程，不能因为页面更新重写请求内容。
+旧幂等响应中的进度会转换为相同动作的新版快照，其完成日期、会话版本和写入令牌保持不变。

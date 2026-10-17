@@ -82,9 +82,15 @@ globalThis.RehabPersistence = (() => {
       }
       return true;
     }
-    function validSnapshot(snapshot,program) {
-      try { return Boolean(snapshot && snapshot.program === program && core.programs[program] && new core.Engine(snapshot.unitMs,program).restore(copy(snapshot)) && (mode === "local" || snapshot.unitMs === 1000)); }
-      catch { return false; }
+    function normalizeSnapshot(snapshot,program) {
+      try {
+        if (!snapshot || snapshot.program !== program || !core.programs[program] || (mode !== "local" && snapshot.unitMs !== 1000)) return null;
+        const engine = new core.Engine(snapshot.unitMs,program);
+        if (!engine.restore(copy(snapshot))) return null;
+        // Let the actual engine map old plan indexes. Preserve the recorded state in the
+        // transport; the engine still restores running/cue snapshots as paused for playback.
+        return {...engine.snapshot(),state:snapshot.state};
+      } catch { return null; }
     }
     function timeZone() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } }
     function schedule() { if (mode === "cloud" && authenticated && !problem) Promise.resolve().then(flush).catch(() => {}); }
@@ -113,6 +119,8 @@ globalThis.RehabPersistence = (() => {
     }
     function ensureCreate(program,snapshot) {
       if (mode === "local") return;
+      snapshot = normalizeSnapshot(snapshot,program);
+      if (!snapshot) throw new Error("训练快照无法转换，原数据已保留。");
       let credential = owner(program,snapshot.id);
       if (!credential) { credential = {revision:0,writerEpoch:1,writerToken:token()}; write(key("owner",program,snapshot.id),credential); }
       observedOwner(program,snapshot.id);
@@ -139,8 +147,8 @@ globalThis.RehabPersistence = (() => {
           const result = safely(() => {
             const id = read(key("active",program));
             if (!id || read(key("terminal",program,id)) === "abandoned") return null;
-            const snapshot = read(key("snapshot",program,id));
-            if (!validSnapshot(snapshot,program)) { if (snapshot !== null) failure("进度无法恢复，原数据已保留。"); return null; }
+            const raw = read(key("snapshot",program,id)), snapshot = normalizeSnapshot(raw,program);
+            if (!snapshot) { if (raw !== null) failure("进度无法恢复，原数据已保留。"); return null; }
             if (mode === "cloud" && owner(program,id)) observedOwner(program,id);
             return copy(snapshot);
           },"进度读取失败，原数据已保留。");
@@ -157,7 +165,8 @@ globalThis.RehabPersistence = (() => {
               }
               remove(key("active",program)); emit(true); return true;
             }
-            if (!validSnapshot(snapshot,program)) return failure("进度格式无效，原数据已保留。");
+            snapshot = normalizeSnapshot(snapshot,program);
+            if (!snapshot) return failure("进度格式无效，原数据已保留。");
             const terminal = read(key("terminal",program,snapshot.id));
             if (terminal && (terminal !== "completed" || snapshot.state !== "finished")) return false;
             const previous = read(key("snapshot",program,snapshot.id));
@@ -190,7 +199,7 @@ globalThis.RehabPersistence = (() => {
             const existing = read(key("record",program,record.id));
             if (existing) { if (existing.source === "manual") return false; write(key("terminal",program,record.id),"completed"); return true; }
             if (read(key("terminal",program,record.id)) === "abandoned") return false;
-            let snapshot = read(key("snapshot",program,record.id));
+            const snapshot = normalizeSnapshot(read(key("snapshot",program,record.id)),program);
             if (!snapshot || snapshot.state !== "finished" || snapshot.completion?.id !== record.id || snapshot.completion.date !== record.date || snapshot.completion.finishedAt !== record.finishedAt) return failure("完成进度尚未保存，请重试。");
             const cloudRecord = {id:record.id,program,date:record.date,finishedAt:record.finishedAt,source:"training",timeZone:timeZone()};
             if (mode === "cloud") {
@@ -261,7 +270,7 @@ globalThis.RehabPersistence = (() => {
     }
     function rememberSession(session) {
       const name = key("session",session.program,session.id), existing = read(name);
-      if (!existing || existing.revision <= session.revision) write(name,session);
+      if (!existing || existing.revision <= session.revision) write(name,{...session,snapshot:normalizeSnapshot(session.snapshot,session.program) || session.snapshot});
     }
     function rememberRecord(record,program = record.program) {
       const name = key("record",program,record.id), existing = read(name);
@@ -294,7 +303,9 @@ globalThis.RehabPersistence = (() => {
               continue;
             }
             write(key("owner",session.program,session.id),{revision:1,writerEpoch:1,writerToken:item.writerToken});
-            write(key("snapshot",session.program,session.id),item.snapshot);
+            const snapshot = normalizeSnapshot(item.snapshot,session.program);
+            if (!snapshot) throw new Error("导入的快照无法恢复，原数据已保留。");
+            write(key("snapshot",session.program,session.id),snapshot);
             if (!read(key("active",session.program))) write(key("active",session.program),session.id);
           }
         }
@@ -413,10 +424,11 @@ globalThis.RehabPersistence = (() => {
               if (!core.validDate(date) || typeof value !== "boolean" || date > core.localDate(new Date(now()))) throw new Error("日期覆盖格式不兼容。");
               scan.overrides.push({key:entry.key,program,date,completed:value});
             } else {
-              if (!validSnapshot(value,program) || !Object.keys(value).every(field => ["version","program","unitMs","id","index","remaining","state","completion"].includes(field)) || (value.completion && !validLegacyRecord(value.completion))) throw new Error("训练进度版本或内容不兼容。");
+              const snapshot = normalizeSnapshot(value,program);
+              if (!snapshot || !Object.keys(value).every(field => ["version","planRevision","program","unitMs","id","index","remaining","state","completion"].includes(field)) || (value.completion && !validLegacyRecord(value.completion))) throw new Error("训练进度版本或内容不兼容。");
               const tokenKey = key("legacy-token",program,value.id); let writerToken = read(tokenKey);
               if (!writerToken) { writerToken = token(); write(tokenKey,writerToken); }
-              scan.progress.push({key:entry.key,program,snapshot:value,writerToken});
+              scan.progress.push({key:entry.key,program,snapshot,writerToken});
             }
           } catch (error) { scan.issues.push({key:entry.key,message:error.message}); }
         }
@@ -459,9 +471,11 @@ globalThis.RehabPersistence = (() => {
           write(intentKey,intent);
         }
         if (!read(key("record",intent.program,intent.sessionId))) {
-          write(key("snapshot",intent.program,intent.sessionId),intent.snapshot);
-          ensureCreate(intent.program,intent.snapshot);
-          enqueue("complete",{program:intent.program,sessionId:intent.sessionId,snapshot:intent.snapshot,record:intent.record},`complete-${hash(intent.program+intent.sessionId)}`);
+          const snapshot = normalizeSnapshot(intent.snapshot,intent.program);
+          if (!snapshot) throw new Error("另存的快照无法转换，原数据已保留。");
+          write(key("snapshot",intent.program,intent.sessionId),snapshot);
+          ensureCreate(intent.program,snapshot);
+          enqueue("complete",{program:intent.program,sessionId:intent.sessionId,snapshot,record:intent.record},`complete-${hash(intent.program+intent.sessionId)}`);
         }
         write(key("terminal",intent.program,intent.sessionId),"completed");
       }

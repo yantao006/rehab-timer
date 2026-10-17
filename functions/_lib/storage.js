@@ -16,7 +16,7 @@ function compileStatements(db, statements) {
   });
 }
 const sameRecord = (a, b) => a.date === b.date && a.finishedAt === b.finishedAt;
-const sqlSession = row => ({ id: row.id, program: row.program, status: row.status, snapshot: JSON.parse(row.snapshot), revision: row.revision, writerEpoch: row.writer_epoch, updatedAt: row.updated_at });
+const sqlSession = row => ({ id: row.id, program: row.program, status: row.status, snapshot: snapshot(JSON.parse(row.snapshot), row.program, row.id), revision: row.revision, writerEpoch: row.writer_epoch, updatedAt: row.updated_at });
 export async function readState(db) {
   const [version, sessions, records, adjustments] = await db.batch([
     db.prepare('SELECT revision FROM app_state WHERE id = 1'),
@@ -215,6 +215,7 @@ async function replay(env, row, hash) {
   return hydrateResponse(env, JSON.parse(row.response));
 }
 async function hydrateResponse(env, saved) {
+  if (saved.session) saved = { ...saved, session: { ...saved.session, snapshot: snapshot(saved.session.snapshot, saved.session.program, saved.session.id) } };
   if (!saved.issuedWriter) return saved;
   const { issuedWriter, ...response } = saved;
   return { ...response, writerToken: await claimToken(env, saved.operationId, saved.session) };

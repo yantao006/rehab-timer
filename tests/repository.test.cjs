@@ -301,3 +301,29 @@ test('刷新加载的本地进度由真实引擎恢复为暂停，不消耗离�
   const reload=runtime({storage:f.storage,api:f.api}); const e=new reload.core.Engine();
   assert.equal(e.restore(reload.store.loadProgress()),true); assert.equal(e.state,'paused'); e.tick(999999999); assert.equal(e.remaining,12345);
 });
+
+test('旧版第5项快照经真实引擎映射，读取不改原值且再次保存不重复偏移',async()=>{
+  const f=runtime({mode:'local'}); await f.repo.init();
+  const legacy={...f.snapshot(),index:95,remaining:12345,state:'running'}; delete legacy.planRevision;
+  const snapshotKey=`${f.repo.prefix}:snapshot:${f.core.PROGRAM}:${legacy.id}`;
+  f.storage.setItem(snapshotKey,JSON.stringify(legacy)); f.storage.setItem(`${f.repo.prefix}:active:${f.core.PROGRAM}`,JSON.stringify(legacy.id));
+  const restored=f.store.loadProgress(); assert.equal(restored.planRevision,2); assert.equal(restored.index,96); assert.equal(restored.remaining,12345);
+  assert.deepEqual(JSON.parse(f.storage.getItem(snapshotKey)),legacy,'Reading preserves the original stored snapshot.');
+  const engine=new f.core.Engine(); assert.equal(engine.restore(restored),true); assert.equal(engine.state,'paused'); assert.equal(engine.interval.round,2); assert.equal(engine.interval.kind,'work');
+  assert.equal(f.store.saveProgress(restored,true),true); assert.equal(f.store.loadProgress().index,96);
+  assert.equal(f.store.saveProgress({...restored,planRevision:999}),false);
+});
+
+test('迁移规范化两套旧进度，原始备份和稳定导入ID保持可核对',async()=>{
+  const f=runtime(); await f.repo.init();
+  const old={...f.snapshot('old-round-four-001'),index:99,remaining:23456,state:'paused'}; delete old.planRevision;
+  const joint={...f.snapshot('old-joint-manual-001',f.core.JOINT_PROGRAM),index:f.core.jointPlan.length-1,remaining:0,state:'ready',planRevision:1};
+  f.storage.setItem('rehab-timer:v1:progress',JSON.stringify(old)); f.storage.setItem('rehab-timer:v1:joint:progress',JSON.stringify(joint));
+  const preview=f.repo.scanLegacy(); assert.equal(preview.progress.length,2); assert.equal(preview.issues.length,0);
+  const original=preview.progress.find(item=>item.program===f.core.PROGRAM),lower=preview.progress.find(item=>item.program===f.core.JOINT_PROGRAM);
+  assert.equal(original.snapshot.index,102); assert.equal(original.snapshot.planRevision,2); assert.equal(original.snapshot.remaining,23456);
+  assert.equal(lower.snapshot.index,joint.index); assert.equal(lower.snapshot.planRevision,2); assert.equal(lower.snapshot.state,'ready');
+  const backup=JSON.parse(f.repo.backupLegacy()); assert.deepEqual(JSON.parse(backup.entries.find(item=>item.key==='rehab-timer:v1:progress').value),old);
+  const reload=runtime({storage:f.storage,api:f.api}); assert.equal(reload.repo.scanLegacy().importId,preview.importId);
+  assert.equal(f.storage.getItem('rehab-timer:v1:progress'),JSON.stringify(old));
+});

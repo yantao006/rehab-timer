@@ -2,6 +2,7 @@
     globalThis.RehabCore = (() => {
       "use strict";
       const VERSION = 1;
+      const PLAN_REVISION = 2;
       const PROGRAM = "five-stage-v1";
       const JOINT_PROGRAM = "lower-limb-joints-v1";
       const stages = [
@@ -11,7 +12,7 @@
         { name: "左踝内翻训练", equipment: "弹力带 15 磅", short: "踝内翻" },
         { name: "左小腿踮脚静力训练 → 左小腿拉伸", equipment: "", short: "踮脚/拉伸" }
       ];
-      const makePlan = () => {
+      const makePlan = (roundRests = true) => {
         const plan = [{ stage: 0, kind: "prep", seconds: 30 }];
         for (let stage = 0; stage < 4; stage++) {
           for (let group = 1; group <= 2; group++) {
@@ -25,10 +26,12 @@
         for (let round = 1; round <= 4; round++) {
           plan.push({ stage: 4, round, kind: "work", action: "左小腿踮脚静力训练", seconds: 30 });
           plan.push({ stage: 4, round, kind: "stretch", action: "左小腿拉伸", seconds: 30 });
+          if (roundRests && round < 4) plan.push({ stage: 4, round, kind: "round-rest", seconds: 30 });
         }
         return plan.map((item, index) => Object.freeze({ ...item, index }));
       };
       const plan = Object.freeze(makePlan());
+      const legacyPlan = Object.freeze(makePlan(false));
       const jointStages = Object.freeze([
         { name: "双侧屈膝抗阻静力训练", equipment: "弹力带 10 到 15 磅", short: "屈膝抗阻" },
         { name: "双侧屈膝屈髋维持训练", equipment: "", short: "屈膝屈髋" },
@@ -139,7 +142,7 @@
           this.reason = ""; return true;
         }
         skip(kind, now) {
-          if (this.state !== "running" || this.interval.kind !== kind || !["prep","group-rest"].includes(kind)) return false;
+          if (this.state !== "running" || this.interval.kind !== kind || !["prep","group-rest","round-rest"].includes(kind)) return false;
           // Revalidate at the click's timestamp, so a stale control cannot skip work.
           const result = this.tick(now);
           if (result || this.state !== "running" || this.interval.kind !== kind) return false;
@@ -147,17 +150,19 @@
         }
         snapshot() {
           if (this.state === "idle") return null;
-          return { version: VERSION, program: this.program, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
+          return { version: VERSION, planRevision: PLAN_REVISION, program: this.program, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
         }
         restore(s) {
-          const schedule = this.plan;
+          if (!s || (s.planRevision !== undefined && ![1, PLAN_REVISION].includes(s.planRevision))) return false;
+          const legacy = s.planRevision === undefined || s.planRevision === 1;
+          const schedule = legacy && this.program === PROGRAM ? legacyPlan : this.plan;
           if (!s || s.version !== VERSION || s.program !== this.program || s.unitMs !== this.unitMs || !validId(s.id) || !Number.isInteger(s.index) || !schedule[s.index] || !Number.isFinite(s.remaining) || s.remaining < 0 || s.remaining > schedule[s.index].seconds*this.unitMs || !["cue","running","paused","ready","manual","finished"].includes(s.state)) return false;
           if (s.state === "finished" && (s.index !== schedule.length-1 || s.remaining !== 0 || !validRecord(s.completion) || s.completion.id !== s.id)) return false;
           if (s.state !== "finished" && (s.completion !== null || (schedule[s.index].kind !== "manual" && s.remaining <= 0))) return false;
           if (s.state === "manual" && schedule[s.index].kind !== "manual") return false;
           const manualGroupBoundary = schedule[s.index].kind === "manual" && schedule[s.index].group === 2 && schedule[s.index-1]?.kind === "manual";
           if (s.state === "ready" && (s.index === 0 || (!manualGroupBoundary && schedule[s.index-1].stage === schedule[s.index].stage) || s.remaining !== schedule[s.index].seconds*this.unitMs)) return false;
-          this.id = s.id; this.index = s.index; this.remaining = s.remaining; this.completion = s.completion;
+          this.id = s.id; this.index = legacy && this.program === PROGRAM && s.index >= 93 ? s.index + Math.floor((s.index - 93) / 2) : s.index; this.remaining = s.remaining; this.completion = s.completion;
           this.state = s.state === "finished" ? "finished" : s.state === "ready" ? "ready" : "paused";
           this.deadline = null; this.lastNow = null; this.reason = "进度已恢复。";
           return true;
@@ -182,7 +187,7 @@
           if (item.kind === "work" && item.rep === 1) return `group-${item.group}`;
         }
         if (item.kind === "prep") return "prepare";
-        if (["rest","group-rest"].includes(item.kind)) return "rest";
+        if (["rest","group-rest","round-rest"].includes(item.kind)) return "rest";
         if (item.stage === 4) return item.kind === "stretch" ? "stretch" : "calf-raise";
         if (item.rep === 1) {
           if (item.group === 2) return "group-2";
@@ -333,5 +338,5 @@
         sounds.push({ key, at:end });
         return { entries, sounds, end, duration:end+cues[key][1]/1000+.25 };
       }
-      return { VERSION, PROGRAM, JOINT_PROGRAM, programs, stages, plan, jointStages, jointPlan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
+      return { VERSION, PLAN_REVISION, PROGRAM, JOINT_PROGRAM, programs, stages, plan, jointStages, jointPlan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
     })();

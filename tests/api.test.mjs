@@ -12,7 +12,7 @@ const NOW = Date.parse('2026-10-17T03:00:00.000Z');
 const DBS = [];
 afterEach(() => { for (const db of DBS.splice(0)) db.close(); });
 function setup() { const DB = new SQLiteD1(); DBS.push(DB); return { DB, APP_ENV: 'preview', SHARED_PASSPHRASE: 'synthetic-private-passphrase', SESSION_SECRET: 'synthetic-session-secret-000000000000000000000000000000' }; }
-function snap(id = 'synthetic-session-001', program = P, patch = {}) { return { version: 1, program, unitMs: 1000, id, index: 0, remaining: 30000, state: 'paused', completion: null, ...patch }; }
+function snap(id = 'synthetic-session-001', program = P, patch = {}) { return { version: 1, planRevision: 2, program, unitMs: 1000, id, index: 0, remaining: 30000, state: 'paused', completion: null, ...patch }; }
 function create(id = 'synthetic-session-001', program = P) { return { operationId: `create-${id}`, type: 'create', program, sessionId: id, snapshot: snap(id, program), writerToken: TOKEN }; }
 function update(type, patch = {}) { return { operationId: `synthetic-${type}-operation`, type, program: P, sessionId: 'synthetic-session-001', expectedRevision: 1, writerEpoch: 1, writerToken: TOKEN, ...patch }; }
 function complete(id = 'synthetic-session-001', program = P, patch = {}) {
@@ -27,7 +27,7 @@ async function call(env, path, method = 'GET', data, cookie, extra = {}) {
 async function access(env) { const { response } = await call(env, 'login', 'POST', { passphrase: env.SHARED_PASSPHRASE }); assert.equal(response.status, 200); return response.headers.get('set-cookie').split(';')[0]; }
 async function rejectCode(promise, code) { await assert.rejects(promise, error => error.code === code); }
 
-test('服务端验证计划逐段对应实际训练核心，原计划101段、下肢99段', () => {
+test('服务端验证计划逐段对应实际训练核心，原计划104段、下肢99段', () => {
   const corePath = new URL('../src/core.js', import.meta.url);
   const source = existsSync(corePath) ? readFileSync(corePath, 'utf8') : [...readFileSync(new URL('../index.html', import.meta.url), 'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)][0][1];
   const context = vm.createContext({ Date }); vm.runInContext(source, context);
@@ -220,4 +220,77 @@ test('最大迁移500条记录及500覆盖用JSON1批量绑定，总查询数低
   const env2 = setup(); env2.DB.failStatement = sql => sql.startsWith('INSERT INTO legacy_imports');
   await assert.rejects(applyOperation(env2, importing({ records, overrides }), NOW), /injected-storage-error/);
   env2.DB.failStatement = null; assert.equal((await stateResponse(env2)).records.length, 0);
+});
+
+test('旧快照第五项每个动作映射到同一动作，剩余时间和原完成日期保留', () => {
+  const context = vm.createContext({ Date }); vm.runInContext(readFileSync(new URL('../src/core.js', import.meta.url), 'utf8'), context);
+  const { Engine, plan } = context.RehabCore;
+  assert.equal(plan.length, 104); assert.equal(plan.reduce((sum, item) => sum + item.seconds, 0), 1520);
+  const expected = [93, 94, 96, 97, 99, 100, 102, 103];
+  for (let oldIndex = 93; oldIndex <= 100; oldIndex++) {
+    const legacy = snap('legacy-upgrade-session', P, { index: oldIndex, remaining: 12345 }); delete legacy.planRevision;
+    const engine = new Engine(); assert.equal(engine.restore(legacy), true);
+    assert.equal(engine.snapshot().planRevision, 2); assert.equal(engine.index, expected[oldIndex - 93]); assert.equal(engine.remaining, 12345);
+    assert.equal(engine.interval.kind, oldIndex % 2 ? 'work' : 'stretch'); assert.equal(engine.state, 'paused');
+  }
+  const final = complete('legacy-finished-upgrade').snapshot; final.index = 100; delete final.planRevision;
+  const finished = new Engine(); assert.equal(finished.restore(final), true); assert.equal(finished.index, 103); assert.equal(finished.snapshot().completion.finishedAt, final.completion.finishedAt);
+  const invalid = { ...final, index: 101 }; assert.equal(new Engine().restore(invalid), false);
+  assert.equal(new Engine().restore({ ...final, planRevision: 3 }), false);
+  const latestRest = snap('current-round-rest', P, { index: 95, remaining: 30000 });
+  const current = new Engine(); assert.equal(current.restore(latestRest), true); assert.equal(current.interval.kind, 'round-rest'); assert.equal(current.index, 95);
+});
+
+test('前三轮休息可跳过但工作不可跳，第四轮拉伸后直接终态', () => {
+  const context = vm.createContext({ Date }); vm.runInContext(readFileSync(new URL('../src/core.js', import.meta.url), 'utf8'), context);
+  const { Engine, plan, cueFor } = context.RehabCore;
+  const rests = [...plan].filter(item => item.kind === 'round-rest'); assert.equal(rests.length, 3);
+  for (const rest of rests) {
+    assert.equal(rest.seconds, 30); assert.equal(cueFor(rest), 'rest');
+    const engine = new Engine(); assert.equal(engine.restore(snap('round-skip-session', P, { index: rest.index, remaining: 30000 })), true);
+    engine.continue(); engine.arm(0); assert.equal(engine.skip('round-rest', 100), true);
+    assert.equal(engine.interval.kind, 'work'); assert.equal(engine.interval.round, rest.round + 1); assert.equal(engine.remaining, 30000);
+    engine.arm(100); assert.equal(engine.skip('round-rest', 200), false);
+  }
+  assert.equal(plan.at(-1).kind, 'stretch'); assert.equal(plan.at(-1).round, 4);
+  const final = new Engine(); final.restore(snap('round-final-session', P, { index: 103, remaining: 500 })); final.continue(); final.arm(0);
+  assert.equal(final.tick(500, new Date(NOW)), 'finished'); assert.equal(final.index, 103);
+});
+
+test('服务端按planRevision解释旧动作和新轮休，旧进度不会误判为轮休或倒退', async () => {
+  const env = setup(), input = create('old-index-wire-session'); input.snapshot.index = 95; input.snapshot.remaining = 18000; delete input.snapshot.planRevision;
+  const created = await applyOperation(env, input, NOW); assert.equal(created.session.snapshot.index, 96); assert.equal(created.session.snapshot.planRevision, 2);
+  const progress = update('progress', { sessionId: input.sessionId, snapshot: { ...input.snapshot, index: 96 }, operationId: 'legacy-progress-wire' });
+  const advanced = await applyOperation(env, progress, NOW); assert.equal(advanced.session.snapshot.index, 97);
+  const modern = update('progress', { sessionId: input.sessionId, expectedRevision: 2, snapshot: snap(input.sessionId, P, { index: 98, remaining: 24000 }), operationId: 'current-round-rest-wire' });
+  const rested = await applyOperation(env, modern, NOW); assert.equal(rested.session.snapshot.index, 98); assert.equal(rested.session.snapshot.planRevision, 2);
+  await rejectCode(applyOperation(env, { ...progress, expectedRevision: 3, operationId: 'stale-legacy-wire', snapshot: input.snapshot }, NOW), 'progress_regression');
+  assert.deepEqual(await applyOperation(env, input, NOW + 1000), created, 'The old persisted request body remains safe to retry.');
+});
+
+test('已部署D1旧会话读取与接管升级索引，旧幂等日志响应也升级且不改请求摘要', async () => {
+  const env = setup(), input = create('predeployment-session'); input.snapshot.index = 95; input.snapshot.remaining = 21000; delete input.snapshot.planRevision;
+  const created = await applyOperation(env, input, NOW);
+  // Simulate a row and receipt written by the previously deployed 101-interval server.
+  await env.DB.prepare('UPDATE sessions SET snapshot = ? WHERE program = ? AND id = ?').bind(JSON.stringify(input.snapshot), P, input.sessionId).run();
+  const oldReceipt = { ...created, session: { ...created.session, snapshot: input.snapshot } };
+  await env.DB.prepare('UPDATE operation_log SET response = ? WHERE operation_id = ?').bind(JSON.stringify(oldReceipt), input.operationId).run();
+  const state = await stateResponse(env); assert.equal(state.sessions[0].snapshot.index, 96); assert.equal(state.sessions[0].snapshot.planRevision, 2);
+  const retried = await applyOperation(env, input, NOW); assert.equal(retried.session.snapshot.index, 96); assert.equal(retried.session.snapshot.planRevision, 2);
+  const claimed = await applyOperation(env, { operationId: 'claim-predeployment', type: 'claim', program: P, sessionId: input.sessionId, expectedRevision: 1 }, NOW);
+  assert.equal(claimed.session.snapshot.index, 96); assert.equal(claimed.session.snapshot.state, 'paused');
+  const persisted = await env.DB.prepare('SELECT snapshot FROM sessions WHERE id = ?').bind(input.sessionId).first();
+  assert.equal(JSON.parse(persisted.snapshot).planRevision, 2); assert.equal(JSON.parse(persisted.snapshot).index, 96);
+});
+
+test('旧终态index100可导入并完成为新index103，下肢旧快照索引不偏移', async () => {
+  const env = setup(), completed = complete('old-terminal-plan').snapshot; completed.index = 100; delete completed.planRevision;
+  const joint = snap('old-joint-plan', J, { index: 98, remaining: 0, state: 'ready' }); delete joint.planRevision;
+  await applyOperation(env, importing({ progress: [
+    { key: 'rehab-timer:v1:progress', program: P, snapshot: completed, writerToken: TOKEN },
+    { key: 'rehab-timer:v1:joint:progress', program: J, snapshot: joint, writerToken: TOKEN }
+  ] }), NOW);
+  const state = await stateResponse(env), original = state.sessions.find(value => value.program === P), unchanged = state.sessions.find(value => value.program === J);
+  assert.equal(original.snapshot.index, 103); assert.equal(original.status, 'completed'); assert.equal(original.snapshot.planRevision, 2);
+  assert.equal(state.records[0].finishedAt, completed.completion.finishedAt); assert.equal(unchanged.snapshot.index, 98); assert.equal(unchanged.snapshot.planRevision, 2);
 });
