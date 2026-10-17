@@ -36,6 +36,42 @@
   let store=repository.forProgram(program), history=store.history(), savedCompletion=false;
   function savePreference(){try{storage?.setItem(uiKey,JSON.stringify({program,groupRestSeconds:preferredGroupRestSeconds}));}catch{storageWarning("训练偏好未保存，训练记录不受影响。");}}
       const clock = () => performance.now();
+  // Only this page owns these timestamps. Never attach them to an Engine or repository payload.
+  const sessionElapsed = new Map();
+  let elapsedTimer = null;
+  function currentElapsed(){
+    const entry=sessionElapsed.get(program);
+    return entry&&(entry.id===engine.id||(engine.state==="idle"&&entry.finished))?entry:null;
+  }
+  function elapsedMilliseconds(entry,wallNow=Date.now(),monoNow=clock()){
+    if(!entry.finished)entry.milliseconds=Math.max(entry.milliseconds,wallNow-entry.wallStart,monoNow-entry.monoStart);
+    return entry.milliseconds;
+  }
+  function startElapsed(){
+    sessionElapsed.set(program,{id:engine.id,wallStart:Date.now(),monoStart:clock(),milliseconds:0,finished:false,outcome:null});
+  }
+  function finishElapsed(outcome,milliseconds){
+    const entry=currentElapsed();
+    if(!entry||entry.finished)return;
+    entry.milliseconds=milliseconds??elapsedMilliseconds(entry);entry.finished=true;entry.outcome=outcome;
+  }
+  function elapsedText(milliseconds){
+    const seconds=Math.floor(milliseconds/1000),minutes=Math.floor(seconds/60),hours=Math.floor(minutes/60);
+    return `${hours?`${hours}:`:""}${String(hours?minutes%60:minutes).padStart(2,"0")}:${String(seconds%60).padStart(2,"0")}`;
+  }
+  function renderElapsed(){
+    clearTimeout(elapsedTimer);elapsedTimer=null;
+    const entry=currentElapsed(),hasSession=engine.state!=="idle",value=entry?elapsedText(elapsedMilliseconds(entry)):"未记录";
+    const label=entry?.finished?`本次${entry.outcome==="completed"?"已完成":"已结束"} · 整体耗时`:"本次整体耗时";
+    const hint=entry?"含暂停、休息和等待；仅本页查看，不保存。":"刷新或换设备后，整体耗时无法恢复。";
+    for(const location of ["home","training"]){
+      $(`${location}ElapsedPanel`).hidden=!entry&&!hasSession;
+      text(`${location}ElapsedLabel`,label);text(`${location}ElapsedValue`,value);text(`${location}ElapsedHint`,hint);
+    }
+    // An independent display heartbeat must keep running while training is paused or waiting.
+    // Absolute timestamps include background/sleep time even when callbacks are throttled.
+    if(entry&&!entry.finished&&view!=="records"&&!document.hidden)elapsedTimer=setTimeout(renderElapsed,1000-entry.milliseconds%1000);
+  }
       let timer = null, generation = 0, wakeLock = null, beepTimer = null;
       let nextCueIndex = -1, beepIndex = -1, lastSave = "", lastLane = "";
       let pendingBeep = null, soundEnabled = true;
@@ -286,6 +322,7 @@
     if(force||key!==lastSave){if(store.saveProgress(snap,force))lastSave=key;}
   }
   function finishSave() {
+    finishElapsed("completed");
     store.saveProgress(engine.snapshot(),true);
     savedCompletion=store.complete(engine.completion);
     if(savedCompletion){store.saveProgress(null);history=store.history();}
@@ -373,7 +410,10 @@
     const seconds=plan.reduce((sum,item)=>sum+item.seconds,0),minutes=Math.floor(seconds/60),remainder=seconds%60;
     return `${minutes} 分${remainder?` ${remainder} 秒`:""}`;
   }
-  function syncPlan(){plan=engine.plan;lastLane="";renderProgramDetails();}
+  function syncPlan(){
+    if(engine.id&&sessionElapsed.get(program)?.id!==engine.id)sessionElapsed.delete(program);
+    plan=engine.plan;lastLane="";renderProgramDetails();
+  }
   function restSelectionLocked(){return !["idle","finished"].includes(engine.state)||(engine.state==="finished"&&!savedCompletion);}
   function prepareHomeTraining(){
     if(view!=="home"||engine.state!=="finished"||!savedCompletion)return;
@@ -412,7 +452,7 @@
     $("finishedRecordsButton").hidden=state!=="finished";$("finishedHomeButton").hidden=state!=="finished";
     for(const id of ["soundButton","testSoundButton","resetButton"])$(id).hidden=state==="finished";
     $("normalActions").hidden=!$("resetConfirm").hidden;
-    renderCompletion();lanes();
+    renderCompletion();renderElapsed();lanes();
     if(view==="training"&&previousFocus?.hidden)primaryButton()?.focus({preventScroll:true});
   }
   function setView(next,{focus=false}={}){
@@ -660,7 +700,7 @@
       engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;syncPlan();
     }
     const id=window.crypto?.randomUUID?.()||`session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    if(!engine.start(id))return;resumePosition=null;resumeStage=-1;view="training";savedCompletion=false;showMessage("startMessage","");showMessage("runtimeMessage","");
+    if(!engine.start(id))return;startElapsed();resumePosition=null;resumeStage=-1;view="training";savedCompletion=false;showMessage("startMessage","");showMessage("runtimeMessage","");
     enterCue(false,true);window.scrollTo?.({top:0,behavior:"auto"});primaryButton()?.focus({preventScroll:true});
   });
   $("resumeButton").addEventListener("click",()=>setView("training",{focus:true}));
@@ -687,8 +727,10 @@
   $("resetButton").addEventListener("click",requestReset);$("homeResetButton").addEventListener("click",requestReset);
   $("cancelResetButton").addEventListener("click",()=>{$("resetConfirm").hidden=true;render();primaryButton()?.focus({preventScroll:true});});
   $("confirmResetButton").addEventListener("click",()=>{
+    const entry=currentElapsed(),elapsedAtClick=entry?elapsedMilliseconds(entry):null;
     if(engine.state==="finished"&&!savedCompletion){showMessage("storageMessage","完成记录尚未保存，请重试保存后返回。");$("resetConfirm").hidden=true;render();return;}
     if(!store.saveProgress(null)){storageWarning("进度未清除，仍保留当前训练。");return;}
+    finishElapsed("ended",elapsedAtClick);
     clearAudio();releaseWake();engine=new Engine(unitMs,program,preferredGroupRestSeconds);syncPlan();resumePosition=null;resumeStage=-1;lastSave="";savedCompletion=false;$("resetConfirm").hidden=true;setView("home",{focus:true});log("reset");
   });
   $("retrySaveButton").addEventListener("click",()=>{showMessage("storageMessage","");if(!savedCompletion)finishSave();else runCloudAction($("retrySaveButton"),()=>repository.flush());});
@@ -734,6 +776,7 @@
   document.addEventListener("visibilitychange",()=>{
     log("visibility",{hidden:document.hidden});if(document.hidden){if(isDebug&&engine.state!=="manual")pause("测试页面离开前台，已暂停。",true);checkpoint(true);releaseWake();}
     else{syncTrack();if(activeTrack&&trackMedia.paused)pause("后台播放已中断，请确认后继续。");if(activeTrack)requestWake(generation);history=store.history();renderCalendar();render();repository.refresh().catch(()=>{});}
+    renderElapsed();
   });
   window.addEventListener("pagehide",()=>{pause("离开页面，已暂停。",true);clearAudio();releaseWake();});
   window.addEventListener("online",()=>{repository.flush().catch(()=>{});});
@@ -744,6 +787,7 @@
   window.__rehabTimer={
     get config(){return {debug:isDebug,test:isTest,unitMs,prefix,program,mode,groupRestSeconds:engine.groupRestSeconds,totalSeconds:plan.reduce((n,p)=>n+p.seconds,0)};},events,
     getPlan:()=>plan.map(p=>({...p})),
+    getElapsed:()=>{const entry=currentElapsed();return entry?{milliseconds:elapsedMilliseconds(entry),finished:entry.finished}:null;},
     getState:()=>({...engine.snapshot(),runState:engine.state,view,savedCompletion,soundEnabled,mediaState:speaker.failed?"unavailable":$("cueAudio").paused?"paused":"playing",mediaJob:speaker.job?.key||null,pendingBeep,historyCount:history.length,syncState:repository.status().state})
   };
 })();

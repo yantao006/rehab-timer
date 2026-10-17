@@ -5,8 +5,14 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const html = fs.readFileSync(require('node:path').join(__dirname,'../index.html'),'utf8');
 const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0, mediaDelays={}, storage=new Map(),search='?test=1',protocol='file:',nativeSeekFailure=false,blobSeekFailure=false,stageFetchFailure=false}={}) {
+module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0, mediaDelays={}, storage=new Map(),search='?test=1',protocol='file:',nativeSeekFailure=false,blobSeekFailure=false,stageFetchFailure=false,wallClock=false}={}) {
   let now=0, serial=0, gesture=false;
+  let wallOffset=0;
+  const wallOrigin=typeof wallClock==='number'?wallClock:Date.parse('2026-10-17T04:00:00.000Z');
+  class FixtureDate extends Date {
+    constructor(...args) { super(...(args.length?args:[wallOrigin+now+wallOffset])); }
+    static now() { return wallOrigin+now+wallOffset; }
+  }
   const timers=new Map(), elements=new Map(), documentEvents={}, requests=[],fetchRequests=[];
   const setTimer=(fn,ms=0)=>{const id=++serial;timers.set(id,{fn,at:now+ms});return id;};
   class Element {
@@ -67,7 +73,7 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0
     getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
   const document={hidden:false,getElementById:id=>elements.get(id),createElement:()=>new Element(),
     querySelector:s=>elements.get('runningPanel').querySelector(s), addEventListener:(k,fn)=>documentEvents[k]=fn};
-  const context=vm.createContext({Date,URLSearchParams,performance:{now:()=>now},setTimeout:setTimer,clearTimeout:id=>timers.delete(id),
+  const context=vm.createContext({Date:wallClock===false?Date:FixtureDate,URLSearchParams,performance:{now:()=>now},setTimeout:setTimer,clearTimeout:id=>timers.delete(id),
     localStorage,document,location:{search,protocol},navigator:{audioSession:{}},crypto:{randomUUID:()=>`synthetic-app-${++serial}`},
     AbortController,URL:{createObjectURL:blob=>`blob:synthetic/${blob.source}`,revokeObjectURL(){}},
     fetch:async source=>{
@@ -85,6 +91,11 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0
     async key(id,key) { elements.get(id).listeners.keydown({key,preventDefault(){}});await flush(); },
     async select(id,value) { const element=elements.get(id);element.value=String(value);element.listeners.change({target:element,currentTarget:element});await flush(); },
     async visibility(hidden) {document.hidden=hidden;documentEvents.visibilitychange();await flush();},
+    // Simulate system sleep or a clock correction without advancing the monotonic clock or callbacks.
+    async shiftWall(ms) {
+      if(wallClock===false)throw new Error('shiftWall requires a controlled wallClock');
+      wallOffset+=ms;await flush();
+    },
     async advance(ms) {
       const target=now+ms; await flush();
       for(let guard=0;guard<100000;guard++) {

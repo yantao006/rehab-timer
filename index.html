@@ -85,6 +85,10 @@ summary { cursor:pointer; font-weight:700; padding:14px 0; }
 .training-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:-12px 0 14px; }
 .training-top>p { font-weight:700; font-size:.85rem; text-align:center; }
 .training-top .text-button { font-size:.75rem; }
+.session-elapsed { margin:0 0 20px; padding:12px 0; border-block:1px solid var(--line); }
+.elapsed-row { display:flex; align-items:baseline; justify-content:space-between; gap:12px; font-size:.85rem; color:var(--muted); }
+.elapsed-row strong { flex-shrink:0; color:var(--pool-deep); font-size:1.35rem; line-height:1.3; font-variant-numeric:tabular-nums; }
+.elapsed-hint { margin-top:5px; color:var(--muted); font-size:.72rem; line-height:1.6; }
 .stage-progress { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); list-style:none; gap:10px; margin:0 0 22px; padding:0; }
 .stage-point { display:grid; justify-items:center; gap:5px; color:var(--muted); text-align:center; }
 .stage-number { display:grid; place-items:center; width:34px; height:34px; border:1px solid #659da0; background:var(--foam); border-radius:50%; font-size:.95rem; font-weight:800; }
@@ -276,6 +280,7 @@ summary { cursor:pointer; font-weight:700; padding:14px 0; }
       <div id="planContent" role="tabpanel" aria-labelledby="originalTab">
         <section id="homeView" aria-labelledby="homeTitle">
           <div class="home-heading"><h2 id="homeTitle">准备开始今天的训练</h2><p id="homePlanMeta">5 项动作 · 语音引导</p></div>
+          <div class="session-elapsed" id="homeElapsedPanel" hidden><p class="elapsed-row"><span id="homeElapsedLabel">本次整体耗时</span><strong id="homeElapsedValue" role="timer" aria-live="off" aria-label="本次整体耗时">00:00</strong></p><p class="elapsed-hint" id="homeElapsedHint"></p></div>
           <div class="rest-setting"><div class="rest-setting-row"><label for="groupRestSelect">组间休息</label><select id="groupRestSelect" aria-describedby="groupRestHint"><option value="60">60 秒</option><option value="90">1 分半</option><option value="120">2 分钟</option><option value="150">2 分半</option></select></div><p id="groupRestHint">前四项两组之间，可跳过。</p></div>
           <section class="resume-panel" id="resumePanel" aria-labelledby="resumeTitle" hidden><p class="eyebrow">本设备有一段训练可以继续</p><h3 id="resumeTitle"></h3><p id="resumeMeta"></p><button class="control primary" id="resumeButton" type="button">查看并继续训练</button><button class="text-button danger" id="homeResetButton" type="button">结束这次训练</button></section>
           <section id="idlePanel" aria-label="开始训练"><button class="start-button" id="startButton" type="button"><span class="start-inner"><svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true"><path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/></svg><span class="start-label">开始训练</span></span><span class="start-subtitle">30 秒准备，然后按语音开始</span></button></section>
@@ -287,6 +292,7 @@ summary { cursor:pointer; font-weight:700; padding:14px 0; }
         <section id="trainingView" aria-label="专注训练" hidden>
           <div class="training-top"><button class="text-button" id="backTrainingButton" type="button">返回训练</button><p id="trainingPlanLabel"></p><button class="text-button training-sync" id="trainingSyncButton" type="button">同步状态</button></div>
           <ol class="stage-progress" id="stageProgress" aria-label="五项训练进度，仅展示，不可跳项"></ol>
+          <div class="session-elapsed" id="trainingElapsedPanel" hidden><p class="elapsed-row"><span id="trainingElapsedLabel">本次整体耗时</span><strong id="trainingElapsedValue" role="timer" aria-live="off" aria-label="本次整体耗时">00:00</strong></p><p class="elapsed-hint" id="trainingElapsedHint"></p></div>
           <section class="running-panel" id="runningPanel" aria-label="当前训练" hidden>
             <div class="exercise-identity"><h2 class="exercise-heading" id="exerciseName"></h2><p class="exercise-meta" id="exerciseMeta"></p></div>
             <div class="scoreboard" id="scoreboard"><div class="interval-state"><p class="phase-name" id="phaseName"></p><p class="position-copy" id="positionCopy"></p></div><div class="clock-field"><p class="countdown" id="countdown"></p><p class="countdown-unit" id="countdownUnit"></p><p class="next-cue" id="nextCue"></p></div></div>
@@ -1215,6 +1221,42 @@ globalThis.RehabPersistence = (() => {
   let store=repository.forProgram(program), history=store.history(), savedCompletion=false;
   function savePreference(){try{storage?.setItem(uiKey,JSON.stringify({program,groupRestSeconds:preferredGroupRestSeconds}));}catch{storageWarning("训练偏好未保存，训练记录不受影响。");}}
       const clock = () => performance.now();
+  // Only this page owns these timestamps. Never attach them to an Engine or repository payload.
+  const sessionElapsed = new Map();
+  let elapsedTimer = null;
+  function currentElapsed(){
+    const entry=sessionElapsed.get(program);
+    return entry&&(entry.id===engine.id||(engine.state==="idle"&&entry.finished))?entry:null;
+  }
+  function elapsedMilliseconds(entry,wallNow=Date.now(),monoNow=clock()){
+    if(!entry.finished)entry.milliseconds=Math.max(entry.milliseconds,wallNow-entry.wallStart,monoNow-entry.monoStart);
+    return entry.milliseconds;
+  }
+  function startElapsed(){
+    sessionElapsed.set(program,{id:engine.id,wallStart:Date.now(),monoStart:clock(),milliseconds:0,finished:false,outcome:null});
+  }
+  function finishElapsed(outcome,milliseconds){
+    const entry=currentElapsed();
+    if(!entry||entry.finished)return;
+    entry.milliseconds=milliseconds??elapsedMilliseconds(entry);entry.finished=true;entry.outcome=outcome;
+  }
+  function elapsedText(milliseconds){
+    const seconds=Math.floor(milliseconds/1000),minutes=Math.floor(seconds/60),hours=Math.floor(minutes/60);
+    return `${hours?`${hours}:`:""}${String(hours?minutes%60:minutes).padStart(2,"0")}:${String(seconds%60).padStart(2,"0")}`;
+  }
+  function renderElapsed(){
+    clearTimeout(elapsedTimer);elapsedTimer=null;
+    const entry=currentElapsed(),hasSession=engine.state!=="idle",value=entry?elapsedText(elapsedMilliseconds(entry)):"未记录";
+    const label=entry?.finished?`本次${entry.outcome==="completed"?"已完成":"已结束"} · 整体耗时`:"本次整体耗时";
+    const hint=entry?"含暂停、休息和等待；仅本页查看，不保存。":"刷新或换设备后，整体耗时无法恢复。";
+    for(const location of ["home","training"]){
+      $(`${location}ElapsedPanel`).hidden=!entry&&!hasSession;
+      text(`${location}ElapsedLabel`,label);text(`${location}ElapsedValue`,value);text(`${location}ElapsedHint`,hint);
+    }
+    // An independent display heartbeat must keep running while training is paused or waiting.
+    // Absolute timestamps include background/sleep time even when callbacks are throttled.
+    if(entry&&!entry.finished&&view!=="records"&&!document.hidden)elapsedTimer=setTimeout(renderElapsed,1000-entry.milliseconds%1000);
+  }
       let timer = null, generation = 0, wakeLock = null, beepTimer = null;
       let nextCueIndex = -1, beepIndex = -1, lastSave = "", lastLane = "";
       let pendingBeep = null, soundEnabled = true;
@@ -1465,6 +1507,7 @@ globalThis.RehabPersistence = (() => {
     if(force||key!==lastSave){if(store.saveProgress(snap,force))lastSave=key;}
   }
   function finishSave() {
+    finishElapsed("completed");
     store.saveProgress(engine.snapshot(),true);
     savedCompletion=store.complete(engine.completion);
     if(savedCompletion){store.saveProgress(null);history=store.history();}
@@ -1552,7 +1595,10 @@ globalThis.RehabPersistence = (() => {
     const seconds=plan.reduce((sum,item)=>sum+item.seconds,0),minutes=Math.floor(seconds/60),remainder=seconds%60;
     return `${minutes} 分${remainder?` ${remainder} 秒`:""}`;
   }
-  function syncPlan(){plan=engine.plan;lastLane="";renderProgramDetails();}
+  function syncPlan(){
+    if(engine.id&&sessionElapsed.get(program)?.id!==engine.id)sessionElapsed.delete(program);
+    plan=engine.plan;lastLane="";renderProgramDetails();
+  }
   function restSelectionLocked(){return !["idle","finished"].includes(engine.state)||(engine.state==="finished"&&!savedCompletion);}
   function prepareHomeTraining(){
     if(view!=="home"||engine.state!=="finished"||!savedCompletion)return;
@@ -1591,7 +1637,7 @@ globalThis.RehabPersistence = (() => {
     $("finishedRecordsButton").hidden=state!=="finished";$("finishedHomeButton").hidden=state!=="finished";
     for(const id of ["soundButton","testSoundButton","resetButton"])$(id).hidden=state==="finished";
     $("normalActions").hidden=!$("resetConfirm").hidden;
-    renderCompletion();lanes();
+    renderCompletion();renderElapsed();lanes();
     if(view==="training"&&previousFocus?.hidden)primaryButton()?.focus({preventScroll:true});
   }
   function setView(next,{focus=false}={}){
@@ -1839,7 +1885,7 @@ globalThis.RehabPersistence = (() => {
       engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;syncPlan();
     }
     const id=window.crypto?.randomUUID?.()||`session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    if(!engine.start(id))return;resumePosition=null;resumeStage=-1;view="training";savedCompletion=false;showMessage("startMessage","");showMessage("runtimeMessage","");
+    if(!engine.start(id))return;startElapsed();resumePosition=null;resumeStage=-1;view="training";savedCompletion=false;showMessage("startMessage","");showMessage("runtimeMessage","");
     enterCue(false,true);window.scrollTo?.({top:0,behavior:"auto"});primaryButton()?.focus({preventScroll:true});
   });
   $("resumeButton").addEventListener("click",()=>setView("training",{focus:true}));
@@ -1866,8 +1912,10 @@ globalThis.RehabPersistence = (() => {
   $("resetButton").addEventListener("click",requestReset);$("homeResetButton").addEventListener("click",requestReset);
   $("cancelResetButton").addEventListener("click",()=>{$("resetConfirm").hidden=true;render();primaryButton()?.focus({preventScroll:true});});
   $("confirmResetButton").addEventListener("click",()=>{
+    const entry=currentElapsed(),elapsedAtClick=entry?elapsedMilliseconds(entry):null;
     if(engine.state==="finished"&&!savedCompletion){showMessage("storageMessage","完成记录尚未保存，请重试保存后返回。");$("resetConfirm").hidden=true;render();return;}
     if(!store.saveProgress(null)){storageWarning("进度未清除，仍保留当前训练。");return;}
+    finishElapsed("ended",elapsedAtClick);
     clearAudio();releaseWake();engine=new Engine(unitMs,program,preferredGroupRestSeconds);syncPlan();resumePosition=null;resumeStage=-1;lastSave="";savedCompletion=false;$("resetConfirm").hidden=true;setView("home",{focus:true});log("reset");
   });
   $("retrySaveButton").addEventListener("click",()=>{showMessage("storageMessage","");if(!savedCompletion)finishSave();else runCloudAction($("retrySaveButton"),()=>repository.flush());});
@@ -1913,6 +1961,7 @@ globalThis.RehabPersistence = (() => {
   document.addEventListener("visibilitychange",()=>{
     log("visibility",{hidden:document.hidden});if(document.hidden){if(isDebug&&engine.state!=="manual")pause("测试页面离开前台，已暂停。",true);checkpoint(true);releaseWake();}
     else{syncTrack();if(activeTrack&&trackMedia.paused)pause("后台播放已中断，请确认后继续。");if(activeTrack)requestWake(generation);history=store.history();renderCalendar();render();repository.refresh().catch(()=>{});}
+    renderElapsed();
   });
   window.addEventListener("pagehide",()=>{pause("离开页面，已暂停。",true);clearAudio();releaseWake();});
   window.addEventListener("online",()=>{repository.flush().catch(()=>{});});
@@ -1923,6 +1972,7 @@ globalThis.RehabPersistence = (() => {
   window.__rehabTimer={
     get config(){return {debug:isDebug,test:isTest,unitMs,prefix,program,mode,groupRestSeconds:engine.groupRestSeconds,totalSeconds:plan.reduce((n,p)=>n+p.seconds,0)};},events,
     getPlan:()=>plan.map(p=>({...p})),
+    getElapsed:()=>{const entry=currentElapsed();return entry?{milliseconds:elapsedMilliseconds(entry),finished:entry.finished}:null;},
     getState:()=>({...engine.snapshot(),runState:engine.state,view,savedCompletion,soundEnabled,mediaState:speaker.failed?"unavailable":$("cueAudio").paused?"paused":"playing",mediaJob:speaker.job?.key||null,pendingBeep,historyCount:history.length,syncState:repository.status().state})
   };
 })();</script>
