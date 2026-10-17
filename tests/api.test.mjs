@@ -27,13 +27,57 @@ async function call(env, path, method = 'GET', data, cookie, extra = {}) {
 async function access(env) { const { response } = await call(env, 'login', 'POST', { passphrase: env.SHARED_PASSPHRASE }); assert.equal(response.status, 200); return response.headers.get('set-cookie').split(';')[0]; }
 async function rejectCode(promise, code) { await assert.rejects(promise, error => error.code === code); }
 
-test('服务端验证计划逐段对应实际训练核心，原计划104段、下肢99段', () => {
+test('服务端四档组间休息逐段对应实际训练核心，其他休息时长和索引不变', () => {
   const corePath = new URL('../src/core.js', import.meta.url);
   const source = existsSync(corePath) ? readFileSync(corePath, 'utf8') : [...readFileSync(new URL('../index.html', import.meta.url), 'utf8').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)][0][1];
   const context = vm.createContext({ Date }); vm.runInContext(source, context);
-  for (const [program, plan] of [[P, context.RehabCore.plan], [J, context.RehabCore.jointPlan]]) {
-    assert.deepEqual(schedule(program), JSON.parse(JSON.stringify(plan)).map(({ stage, kind, seconds }) => ({ stage, kind, seconds })));
+  for (const program of [P, J]) for (const seconds of [60, 90, 120, 150]) {
+    const plan = context.RehabCore.planFor(program, seconds), server = schedule(program, 2, seconds);
+    assert.deepEqual(server, JSON.parse(JSON.stringify(plan)).map(({ stage, kind, seconds }) => ({ stage, kind, seconds })));
+    assert.equal(server.length, program === P ? 104 : 99);
+    assert.deepEqual(server.filter(item => item.kind === 'group-rest').map(item => item.seconds), [seconds, seconds, seconds, seconds]);
+    assert.ok(server.filter(item => item.kind === 'stage-rest').every(item => item.seconds === 60));
+    assert.ok(server.filter(item => item.kind === 'round-rest').every(item => item.seconds === 30));
   }
+});
+test('组间休息只接受四档数值，并按选定时长校验剩余时间', async () => {
+  const env = setup(), groupIndex = schedule(P).findIndex(item => item.kind === 'group-rest');
+  for (const seconds of [0, 30, 61, 151, null, '90', {}, true]) {
+    const input = create(); input.snapshot.groupRestSeconds = seconds;
+    await rejectCode(applyOperation(env, input, NOW), 'invalid_input');
+  }
+  for (const seconds of [60, 90, 120, 150]) {
+    const input = create(`group-rest-${seconds}-session`);
+    Object.assign(input.snapshot, { groupRestSeconds: seconds, index: groupIndex, remaining: seconds * 1000 });
+    const saved = await applyOperation(env, input, NOW);
+    assert.equal(saved.session.snapshot.groupRestSeconds, seconds); assert.equal(saved.session.snapshot.remaining, seconds * 1000);
+    await rejectCode(applyOperation(env, update('progress', { operationId: `group-rest-${seconds}-oversized`, sessionId: input.sessionId, snapshot: { ...input.snapshot, remaining: seconds * 1000 + 1 } }), NOW), 'invalid_input');
+  }
+  const notRest = create('custom-rest-not-work'); Object.assign(notRest.snapshot, { groupRestSeconds: 150, index: 1, remaining: 150000 });
+  await rejectCode(applyOperation(env, notRest, NOW), 'invalid_input');
+  assert.equal((await stateResponse(env)).sessions.length, 4);
+});
+test('组间休息固定在本次会话，进度和完成都不能改设置，失败不写入记录', async () => {
+  const env = setup(), input = create(); input.snapshot.groupRestSeconds = 150;
+  await applyOperation(env, input, NOW);
+  await rejectCode(applyOperation(env, update('progress', { snapshot: { ...input.snapshot, groupRestSeconds: 90 } }), NOW), 'session_settings_changed');
+  await rejectCode(applyOperation(env, complete(), NOW), 'session_settings_changed');
+  let state = await stateResponse(env); assert.equal(state.records.length, 0); assert.equal(state.sessions[0].revision, 1); assert.equal(state.sessions[0].snapshot.groupRestSeconds, 150);
+  const finished = complete(); finished.snapshot.groupRestSeconds = 150;
+  await applyOperation(env, finished, NOW);
+  state = await stateResponse(env); assert.equal(state.records.length, 1); assert.equal(state.sessions[0].status, 'completed'); assert.equal(state.sessions[0].snapshot.groupRestSeconds, 150);
+});
+test('旧会话和旧幂等响应缺省为60秒，接管后保留且不能隐式升级休息设置', async () => {
+  const env = setup(), input = create('legacy-rest-default');
+  const created = await applyOperation(env, input, NOW); assert.equal(created.session.snapshot.groupRestSeconds, 60);
+  await env.DB.prepare('UPDATE sessions SET snapshot = ? WHERE id = ?').bind(JSON.stringify(input.snapshot), input.sessionId).run();
+  const oldReceipt = { ...created, session: { ...created.session, snapshot: input.snapshot } };
+  await env.DB.prepare('UPDATE operation_log SET response = ? WHERE operation_id = ?').bind(JSON.stringify(oldReceipt), input.operationId).run();
+  assert.equal((await stateResponse(env)).sessions[0].snapshot.groupRestSeconds, 60);
+  assert.equal((await applyOperation(env, input, NOW)).session.snapshot.groupRestSeconds, 60);
+  const claimed = await applyOperation(env, { operationId: 'claim-legacy-rest-default', type: 'claim', program: P, sessionId: input.sessionId, expectedRevision: 1 }, NOW);
+  assert.equal(claimed.session.snapshot.groupRestSeconds, 60);
+  await rejectCode(applyOperation(env, update('progress', { sessionId: input.sessionId, expectedRevision: 2, writerEpoch: 2, writerToken: claimed.writerToken, snapshot: { ...input.snapshot, groupRestSeconds: 150 } }), NOW), 'session_settings_changed');
 });
 test('缺配置默认拒绝，所有读取和写入都需要认证，登录Cookie安全且不返回口令', async () => {
   const env = setup();

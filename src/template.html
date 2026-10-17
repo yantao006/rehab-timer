@@ -36,6 +36,7 @@
       <div id="planContent" role="tabpanel" aria-labelledby="originalTab">
         <section id="homeView" aria-labelledby="homeTitle">
           <div class="home-heading"><h2 id="homeTitle">准备开始今天的训练</h2><p id="homePlanMeta">5 项动作 · 语音引导</p></div>
+          <div class="rest-setting"><div class="rest-setting-row"><label for="groupRestSelect">组间休息</label><select id="groupRestSelect" aria-describedby="groupRestHint"><option value="60">60 秒</option><option value="90">1 分半</option><option value="120">2 分钟</option><option value="150">2 分半</option></select></div><p id="groupRestHint">前四项两组之间，可跳过。</p></div>
           <section class="resume-panel" id="resumePanel" aria-labelledby="resumeTitle" hidden><p class="eyebrow">本设备有一段训练可以继续</p><h3 id="resumeTitle"></h3><p id="resumeMeta"></p><button class="control primary" id="resumeButton" type="button">查看并继续训练</button><button class="text-button danger" id="homeResetButton" type="button">结束这次训练</button></section>
           <section id="idlePanel" aria-label="开始训练"><button class="start-button" id="startButton" type="button"><span class="start-inner"><svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true"><path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/></svg><span class="start-label">开始训练</span></span><span class="start-subtitle">30 秒准备，然后按语音开始</span></button></section>
           <p class="notice" id="startMessage" role="status" hidden></p>

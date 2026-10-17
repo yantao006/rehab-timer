@@ -170,6 +170,7 @@ globalThis.RehabPersistence = (() => {
             const terminal = read(key("terminal",program,snapshot.id));
             if (terminal && (terminal !== "completed" || snapshot.state !== "finished")) return false;
             const previous = read(key("snapshot",program,snapshot.id));
+            if (previous && normalizeSnapshot(previous,program)?.groupRestSeconds !== snapshot.groupRestSeconds) return failure("本次训练的组间休息已固定，原进度已保留。");
             if (!previous && mode === "cloud" && !canStart()) return failure("当前无法开始新的共享训练，请先联网解锁。");
             write(key("snapshot",program,snapshot.id),snapshot);
             write(key("active",program),snapshot.id);
@@ -425,7 +426,7 @@ globalThis.RehabPersistence = (() => {
               scan.overrides.push({key:entry.key,program,date,completed:value});
             } else {
               const snapshot = normalizeSnapshot(value,program);
-              if (!snapshot || !Object.keys(value).every(field => ["version","planRevision","program","unitMs","id","index","remaining","state","completion"].includes(field)) || (value.completion && !validLegacyRecord(value.completion))) throw new Error("训练进度版本或内容不兼容。");
+              if (!snapshot || !Object.keys(value).every(field => ["version","planRevision","program","unitMs","groupRestSeconds","id","index","remaining","state","completion"].includes(field)) || (value.completion && !validLegacyRecord(value.completion))) throw new Error("训练进度版本或内容不兼容。");
               const tokenKey = key("legacy-token",program,value.id); let writerToken = read(tokenKey);
               if (!writerToken) { writerToken = token(); write(tokenKey,writerToken); }
               scan.progress.push({key:entry.key,program,snapshot,writerToken});

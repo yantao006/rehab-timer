@@ -1,4 +1,5 @@
 export const PLAN_REVISION = 2;
+export const GROUP_REST_OPTIONS = [60, 90, 120, 150];
 export const PROGRAMS = ['five-stage-v1', 'lower-limb-joints-v1'];
 export class ApiError extends Error {
   constructor(status, code, message, extra = {}) { super(message); Object.assign(this, { status, code, extra }); }
@@ -51,7 +52,8 @@ export function record(value, expectedProgram, source, now = Date.now(), legacy 
   }
   return { id: value.id, program: expectedProgram, date: value.date, finishedAt, source, timeZone: zone, revoked: false, revokedAt: null };
 }
-export function schedule(programId, planRevision = PLAN_REVISION) {
+export function schedule(programId, planRevision = PLAN_REVISION, groupRestSeconds = 60) {
+  requireValid(GROUP_REST_OPTIONS.includes(groupRestSeconds), '组间休息只能选择 60、90、120 或 150 秒。');
   const joint = programId === PROGRAMS[1];
   const items = [{ stage: 0, kind: 'prep', seconds: 30 }];
   for (let stage = 0; stage < 4; stage++) {
@@ -60,7 +62,7 @@ export function schedule(programId, planRevision = PLAN_REVISION) {
         items.push({ stage, kind: 'work', seconds: 15 });
         if (rep < 6) items.push({ stage, kind: 'rest', seconds: 5 });
       }
-      if (group === 1) items.push({ stage, kind: 'group-rest', seconds: 60 });
+      if (group === 1) items.push({ stage, kind: 'group-rest', seconds: groupRestSeconds });
     }
     if (joint) items.push({ stage, kind: 'stage-rest', seconds: 60 });
   }
@@ -72,10 +74,11 @@ export function schedule(programId, planRevision = PLAN_REVISION) {
   return items;
 }
 export function snapshot(value, expectedProgram, sessionId, now = Date.now()) {
-  fields(value, ['version', 'planRevision', 'program', 'unitMs', 'id', 'index', 'remaining', 'state', 'completion'], '进度快照');
+  fields(value, ['version', 'planRevision', 'program', 'unitMs', 'groupRestSeconds', 'id', 'index', 'remaining', 'state', 'completion'], '进度快照');
   const sourceRevision = value.planRevision === undefined ? 1 : value.planRevision;
+  const groupRestSeconds = value.groupRestSeconds === undefined ? 60 : value.groupRestSeconds;
   requireValid([1, PLAN_REVISION].includes(sourceRevision), '训练计划版本不受支持。');
-  const plan = schedule(expectedProgram, sourceRevision), item = plan[value.index];
+  const plan = schedule(expectedProgram, sourceRevision, groupRestSeconds), item = plan[value.index];
   requireValid(value.version === 1 && value.program === expectedProgram && value.unitMs === 1000 && value.id === sessionId && Number.isInteger(value.index) && item && Number.isFinite(value.remaining) && value.remaining >= 0 && value.remaining <= item.seconds * 1000 && ['cue', 'running', 'paused', 'ready', 'manual', 'finished'].includes(value.state), '进度快照与正式训练规则不符。');
   if (value.state === 'finished') {
     requireValid(value.index === plan.length - 1 && value.remaining === 0, '训练尚未到达完成阶段。');
@@ -85,7 +88,7 @@ export function snapshot(value, expectedProgram, sessionId, now = Date.now()) {
   requireValid(value.state !== 'manual' || item.kind === 'manual', '只有手工计次阶段可使用手工状态。');
   if (value.state === 'ready') requireValid(value.index > 0 && (plan[value.index - 1].stage !== item.stage || (expectedProgram === PROGRAMS[1] && value.index === plan.length - 1 && item.kind === 'manual')) && value.remaining === item.seconds * 1000, '项间就位快照不正确。');
   // Copy only domain data; deadlines, device identity and arbitrary input never enter the database.
-  return { version: 1, planRevision: PLAN_REVISION, program: expectedProgram, unitMs: 1000, id: sessionId, index: sourceRevision === 1 && expectedProgram === PROGRAMS[0] && value.index >= 93 ? value.index + Math.floor((value.index - 93) / 2) : value.index, remaining: value.remaining, state: value.state, completion: value.completion === null ? null : { version: 1, id: value.completion.id, date: value.completion.date, finishedAt: value.completion.finishedAt } };
+  return { version: 1, planRevision: PLAN_REVISION, program: expectedProgram, unitMs: 1000, groupRestSeconds, id: sessionId, index: sourceRevision === 1 && expectedProgram === PROGRAMS[0] && value.index >= 93 ? value.index + Math.floor((value.index - 93) / 2) : value.index, remaining: value.remaining, state: value.state, completion: value.completion === null ? null : { version: 1, id: value.completion.id, date: value.completion.date, finishedAt: value.completion.finishedAt } };
 }
 export function revision(value) { requireValid(Number.isSafeInteger(value) && value >= 1, '训练版本不正确。'); return value; }
 export function operation(value) {

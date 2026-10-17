@@ -196,6 +196,7 @@ async function prepare(env, input, state, currentTime) {
       if (input.type === 'abandon') session.status = 'abandoned';
       else {
         session.snapshot = snapshot(input.snapshot, input.program, input.sessionId, currentTime);
+        if (session.snapshot.groupRestSeconds !== previous.snapshot.groupRestSeconds) sessionConflict(previous, 'session_settings_changed', '本次训练的组间休息已固定，请保留原设置继续。');
         if (session.snapshot.index < previous.snapshot.index) sessionConflict(previous, 'progress_regression', '进度不能退回已执行的训练阶段。');
         if (input.type === 'complete') {
           assertInput(session.snapshot.state === 'finished', '完成操作必须提交终态进度。');

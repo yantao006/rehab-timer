@@ -42,7 +42,7 @@ function runtime(env, { storage = new Storage(), network = transport(env), searc
   const core = context.RehabCore;
   const repo = context.RehabPersistence.create({ mode: 'cloud', storage, fetch: network.fetch.bind(network), now: () => clock, uuid: () => crypto.randomUUID() });
   const f = { repo, core, storage, network, env, store: repo.forProgram(core.PROGRAM), advance(ms) { clock += ms; } };
-  f.snapshot = (id = 'integration-session-001', program = core.PROGRAM) => { const engine = new core.Engine(1000, program); engine.start(id); engine.arm(0); return plain(engine.snapshot()); };
+  f.snapshot = (id = 'integration-session-001', program = core.PROGRAM, groupRestSeconds = 60) => { const engine = new core.Engine(1000, program, groupRestSeconds); engine.start(id); engine.arm(0); return plain(engine.snapshot()); };
   f.finish = (id = 'integration-session-001', program = core.PROGRAM) => ({ ...f.snapshot(id, program), index: core.programs[program].plan.length - 1, remaining: 0, state: 'finished', completion: { version: 1, id, date: core.localDate(new Date(NOW)), finishedAt: new Date(NOW).toISOString() } });
   runtimes.push(f); return f;
 }
@@ -59,6 +59,43 @@ function finish(f, id = 'integration-session-001', program = f.core.PROGRAM) {
   const store = f.repo.forProgram(program), value = f.finish(id, program);
   assert.equal(store.saveProgress(value, true), true); assert.equal(store.complete(value.completion), true); assert.equal(store.saveProgress(null), true);
 }
+
+test('真实仓储和SQLite：150秒组间休息在丢失响应、刷新和跨设备接管后保留', async () => {
+  const env = environment(), first = await unlocked(env);
+  for (const program of [first.core.PROGRAM, first.core.JOINT_PROGRAM]) {
+    const id = `custom-rest-${program}`, store = first.repo.forProgram(program), snapshot = first.snapshot(id, program, 150);
+    assert.equal(store.saveProgress(snapshot), true); await first.repo.flush();
+    Object.assign(snapshot, { index: first.core.planFor(program, 150).findIndex(item => item.kind === 'group-rest'), remaining: 148765, state: 'paused' });
+    first.network.drop = 'progress'; assert.equal(store.saveProgress(snapshot, true), true); await first.repo.flush();
+    assert.equal(first.repo.status().state, 'offline');
+    const sent = first.network.calls.filter(call => call.data?.type === 'progress').at(-1).data;
+    const reload = await unlocked(env, { storage: first.storage, network: first.network });
+    assert.deepEqual(first.network.calls.filter(call => call.data?.type === 'progress').at(-1).data, sent);
+    assert.equal(reload.repo.forProgram(program).loadProgress().groupRestSeconds, 150);
+    const other = await unlocked(env), claimed = await other.repo.claimSession(id, program);
+    assert.equal(claimed.groupRestSeconds, 150); assert.equal(claimed.remaining, 148765); assert.equal(claimed.state, 'paused');
+    const restored = new other.core.Engine(1000, program, 60); assert.equal(restored.restore(claimed), true);
+    assert.equal(restored.interval.seconds, 150); assert.equal(restored.snapshot().groupRestSeconds, 150);
+    assert.equal(other.repo.forProgram(program).saveProgress({ ...claimed, remaining: 140000 }, true), true); await other.repo.flush();
+    const session = (await stateResponse(env)).sessions.find(item => item.id === id);
+    assert.equal(session.snapshot.groupRestSeconds, 150); assert.equal(session.snapshot.remaining, 140000); assert.equal(session.writerEpoch, 2);
+    await first.repo.init();
+  }
+});
+
+test('真实迁移保留自选组间休息，旧数据缺省60秒，备份原键不改写', async () => {
+  const env = environment(), f = await unlocked(env);
+  const chosen = f.snapshot('migrate-rest-selected', f.core.PROGRAM, 150);
+  Object.assign(chosen, { index: f.core.planFor(f.core.PROGRAM, 150).findIndex(item => item.kind === 'group-rest'), remaining: 123456, state: 'paused' });
+  const old = f.snapshot('migrate-rest-legacy', f.core.JOINT_PROGRAM); delete old.groupRestSeconds;
+  f.storage.setItem('rehab-timer:v1:progress', JSON.stringify(chosen)); f.storage.setItem('rehab-timer:v1:joint:progress', JSON.stringify(old));
+  const preview = f.repo.scanLegacy(); assert.equal(preview.counts.issues, 0); assert.equal(preview.counts.progress, 2);
+  assert.equal((await f.repo.importLegacy(preview)).ok, true);
+  const state = await stateResponse(env), selected = state.sessions.find(item => item.id === chosen.id), legacy = state.sessions.find(item => item.id === old.id);
+  assert.equal(selected.snapshot.groupRestSeconds, 150); assert.equal(selected.snapshot.remaining, 123456); assert.equal(legacy.snapshot.groupRestSeconds, 60);
+  assert.equal(f.store.loadProgress().groupRestSeconds, 150); assert.equal(f.repo.forProgram(f.core.JOINT_PROGRAM).loadProgress().groupRestSeconds, 60);
+  assert.equal(f.storage.getItem('rehab-timer:v1:progress'), JSON.stringify(chosen)); assert.equal(f.storage.getItem('rehab-timer:v1:joint:progress'), JSON.stringify(old));
+});
 
 test('实际仓储/API/SQLite：口令解锁、create/progress/complete和两计划共享日历', async () => {
   const env = environment(), f = await unlocked(env);

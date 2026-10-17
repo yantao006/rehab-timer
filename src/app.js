@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const { PROGRAM, JOINT_PROGRAM, programs, Engine, MediaChannel, cues, cueFor, stageTrack, localDate, monthCells, weeklyCount } = RehabCore;
+  const { PROGRAM, JOINT_PROGRAM, programs, GROUP_REST_OPTIONS, planFor, Engine, MediaChannel, cues, cueFor, stageTrack, localDate, monthCells, weeklyCount } = RehabCore;
   const params = new URLSearchParams(location.search);
   const debugMs = Number(params.get("debugMs"));
   const isDebug = Number.isFinite(debugMs) && debugMs >= 20 && debugMs < 1000;
@@ -15,11 +15,15 @@
   const showMessage = (id,value) => { text(id,value); $(id).hidden = !value; };
   let storage;
   try { storage = localStorage; } catch { storage = null; }
-  let preferredProgram = PROGRAM;
-  try { const preference=JSON.parse(storage?.getItem(uiKey)||"null"); if (programs[preference?.program]) preferredProgram=preference.program; } catch { /* A preference cannot prevent training. */ }
-  let program=preferredProgram, stages=programs[program].stages, plan=programs[program].plan;
+  let preferredProgram = PROGRAM, preferredGroupRestSeconds = 60;
+  try {
+    const preference=JSON.parse(storage?.getItem(uiKey)||"null");
+    if(programs[preference?.program])preferredProgram=preference.program;
+    if(GROUP_REST_OPTIONS.includes(preference?.groupRestSeconds))preferredGroupRestSeconds=preference.groupRestSeconds;
+  } catch { /* A preference cannot prevent training. */ }
+  let program=preferredProgram, stages=programs[program].stages;
   let prefix=program===PROGRAM?basePrefix:`${basePrefix}:joint`;
-  let engine=new Engine(unitMs,program), view="home", appReady=false, cloudBusy=false;
+  let engine=new Engine(unitMs,program,preferredGroupRestSeconds), plan=engine.plan, view="home", appReady=false, cloudBusy=false;
   let legacyScan=null, backupDownloaded=false, lastCloudLists="", lastManualClick=-Infinity, pendingManualDate=null;
   const events=[];
   const log=(type,detail={})=>{events.push({type,at:performance.now(),...detail});if(events.length>1200)events.shift();};
@@ -30,7 +34,7 @@
     onStatus:status=>{ if(!appReady)return; if(status.conflicts?.some(conflict=>conflict.sessionId===engine.id)&&["running","cue","manual"].includes(engine.state))pause("这次训练的云端写入权或版本已变化，请先处理同步冲突。"); renderCloud(); render(); }
   });
   let store=repository.forProgram(program), history=store.history(), savedCompletion=false;
-  function savePreference(){try{storage?.setItem(uiKey,JSON.stringify({program}));}catch{storageWarning("计划选择未保存，训练记录不受影响。");}}
+  function savePreference(){try{storage?.setItem(uiKey,JSON.stringify({program,groupRestSeconds:preferredGroupRestSeconds}));}catch{storageWarning("训练偏好未保存，训练记录不受影响。");}}
       const clock = () => performance.now();
       let timer = null, generation = 0, wakeLock = null, beepTimer = null;
       let nextCueIndex = -1, beepIndex = -1, lastSave = "", lastLane = "";
@@ -77,9 +81,9 @@
       let trackGuard = null, trackWatchdog = null;
       const stageSources = new Map();
       const TRACK_LOAD_TIMEOUT = 12000, TRACK_PROGRESS_TIMEOUT = 8000, POSITION_TOLERANCE = .08;
-      const stageSource = (stage,selectedProgram) => selectedProgram === PROGRAM ? `audio/stage-${stage+1}.mp3` : `audio/stage-joint-${stage+1}.mp3`;
-      function loadSeekableStage(stage,selectedProgram) {
-        const src=stageSource(stage,selectedProgram);
+      const stageSource = (stage,selectedProgram,groupRestSeconds=60) => `audio/stage-${selectedProgram===PROGRAM?"":"joint-"}${stage+1}${stage<4&&groupRestSeconds!==60?`-rest-${groupRestSeconds}`:""}.mp3`;
+      function loadSeekableStage(stage,selectedProgram,groupRestSeconds) {
+        const src=stageSource(stage,selectedProgram,groupRestSeconds);
         if(location.protocol==="file:")return Promise.resolve(src);
         if(stageSources.has(src))return stageSources.get(src).promise;
         const entry={url:null,promise:null};
@@ -102,13 +106,13 @@
         if (navigator.mediaSession) navigator.mediaSession.playbackState = state;
       }
       function trackIntent(resuming=false) {
-        const stage=engine.interval.stage,track=stageTrack(stage,program),entry=track.entries.find(item=>item.index===engine.index);
+        const stage=engine.interval.stage,groupRestSeconds=engine.groupRestSeconds,track=stageTrack(stage,program,groupRestSeconds),entry=track.entries.find(item=>item.index===engine.index);
         const fresh=engine.remaining===engine.interval.seconds*unitMs;
         const cue=cueFor(engine.interval,engine.index===1||entry===track.entries[0],program);
         const position=resuming&&resumeStage===stage&&Number.isFinite(resumePosition)
           ?resumePosition
           :resuming||!fresh?entry.end-engine.remaining/1000:Math.max(0,entry.start-cues[cue][1]/1000-.25);
-        return {stage,program,track,entry,index:engine.index,fresh,position,snapshot:engine.snapshot()};
+        return {stage,program,groupRestSeconds,track,entry,index:engine.index,fresh,position,snapshot:engine.snapshot()};
       }
       function failTrack(reason) {
         const guard=trackGuard;
@@ -181,7 +185,7 @@
       function startTrack(intent=trackIntent(),source=null) {
         clearAudio();playbackSession();
         trackStage=intent.stage;activeTrack=intent.track;
-        const originalSource=stageSource(intent.stage,intent.program);
+        const originalSource=stageSource(intent.stage,intent.program,intent.groupRestSeconds);
         const src=source||stageSources.get(originalSource)?.url||originalSource;
         const token=generation;
         const guard={...intent,confirmed:false,playing:false,playingAt:clock(),lastPosition:intent.position,lastObservedAt:clock(),lastProgressAt:clock()};
@@ -205,7 +209,7 @@
         log("track-start",{stage:trackStage,position:intent.position,seekableSource:src!==originalSource});
         // Prepare a fully loaded source for later nonzero positioning. This does
         // not delay the gesture-started playback and does not depend on HTTP Range behavior.
-        loadSeekableStage(intent.stage,intent.program).catch(()=>log("track-cache-unavailable",{stage:intent.stage}));
+        loadSeekableStage(intent.stage,intent.program,intent.groupRestSeconds).catch(()=>log("track-cache-unavailable",{stage:intent.stage}));
       }
       trackMedia.addEventListener("timeupdate",syncTrack);
       trackMedia.addEventListener("ended",syncTrack);
@@ -365,6 +369,16 @@
     $("retrySaveButton").hidden=savedCompletion&&synced;
     text("retrySaveButton",savedCompletion?"重试同步":"重试保存记录");
   }
+  function timedDuration(){
+    const seconds=plan.reduce((sum,item)=>sum+item.seconds,0),minutes=Math.floor(seconds/60),remainder=seconds%60;
+    return `${minutes} 分${remainder?` ${remainder} 秒`:""}`;
+  }
+  function syncPlan(){plan=engine.plan;lastLane="";renderProgramDetails();}
+  function restSelectionLocked(){return !["idle","finished"].includes(engine.state)||(engine.state==="finished"&&!savedCompletion);}
+  function prepareHomeTraining(){
+    if(view!=="home"||engine.state!=="finished"||!savedCompletion)return;
+    engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;lastSave="";resumePosition=null;resumeStage=-1;syncPlan();
+  }
   function render(){
     const previousFocus=document.activeElement;
     const state=engine.state,item=engine.interval,hasProgress=!["idle","finished"].includes(state),manualReady=state==="ready"&&item.kind==="manual"&&item.group===2;
@@ -374,7 +388,9 @@
     $("mainNav").hidden=view==="training";$("pageFooter").hidden=view==="training";$("actionDock").hidden=view!=="training";
     for(const [id,current]of [["homeNav",view==="home"],["recordsNav",view==="records"]]){if(current)$(id).setAttribute("aria-current","page");else $(id).removeAttribute("aria-current");}
     $("resumePanel").hidden=!hasProgress;$("idlePanel").hidden=hasProgress;
-    text("homePlanMeta",`${program===PROGRAM?"原计划":"下肢关节居家训练"} · 5 项动作`);
+    text("homePlanMeta",`5 项动作 · 计时 ${timedDuration()}${program===JOINT_PROGRAM?" + 手动动作":""}`);
+    $("groupRestSelect").value=String(engine.groupRestSeconds);$("groupRestSelect").disabled=restSelectionLocked();
+    text("groupRestHint",hasProgress?"本次训练已锁定，结束后可更改。":engine.state==="finished"&&!savedCompletion?"请先保存这次完成记录，再更改休息时间。":"前四项两组之间，可跳过；两套计划共用此偏好。");
     if(hasProgress){text("resumeTitle",`${item.stage+1}. ${stages[item.stage].name}`);text("resumeMeta",state==="ready"?(manualReady?"第 1 组已完成，等待开始第 2 组。":"上一项已完成，等待下一项就位。"):item.kind==="manual"?`第 ${item.group}/2 组 · 8 到 10 次，进度已保留。`:`当前段还剩 ${Math.ceil(engine.remaining/unitMs)} 秒，进度已保留。`);}
     $("runningPanel").hidden=state==="idle"||state==="finished";$("finishedPanel").hidden=state!=="finished";
     stagePoints();text("trainingPlanLabel",`${program===PROGRAM?"原计划":"下肢关节居家训练"} · ${item.stage+1}/5 项`);
@@ -401,7 +417,7 @@
   }
   function setView(next,{focus=false}={}){
     if(next!=="training"){pause();if(engine.state==="ready")checkpoint(true);}
-    view=next;$("resetConfirm").hidden=true;$("cloudPanel").hidden=true;$("openCloudButton").setAttribute("aria-expanded","false");
+    view=next;prepareHomeTraining();$("resetConfirm").hidden=true;$("cloudPanel").hidden=true;$("openCloudButton").setAttribute("aria-expanded","false");
     render();if(next==="records")renderCalendar();window.scrollTo?.({top:0,behavior:"auto"});
     if(focus){const target=next==="home"?(!$("resumePanel").hidden?$("resumeButton"):$("startButton")):next==="records"?$("prevMonth"):primaryButton();target?.focus({preventScroll:true});}
   }
@@ -440,7 +456,7 @@
             // Even with sound muted, establish media permission synchronously.
             // Loading the complete stage in parallel avoids browser-specific seek behavior.
             const playing=speaker.play(cueFor(engine.interval,true,program),gesture);
-            const loading=loadSeekableStage(intent.stage,intent.program);
+            const loading=loadSeekableStage(intent.stage,intent.program,intent.groupRestSeconds);
             render();checkpoint(true);
             try{
               const [result,source]=await Promise.all([playing,loading]);
@@ -542,9 +558,9 @@
     if(!resumable.length){const empty=document.createElement("p");empty.className="muted-note";empty.textContent=status.state==="locked"?"解锁后可以查看云端暂停进度。":"没有其他可恢复的训练。";remote.append(empty);}
     for(const session of resumable){
       const row=document.createElement("div");row.className="remote-row";const heading=document.createElement("h4"),detail=document.createElement("p"),button=document.createElement("button");
-      const schedule=programs[session.program],item=schedule.plan[session.snapshot.index],own=repository.forProgram(session.program).loadProgress()?.id===session.id;
+      const schedule=programs[session.program],item=planFor(session.program,session.snapshot.groupRestSeconds??60)[session.snapshot.index],own=repository.forProgram(session.program).loadProgress()?.id===session.id;
       heading.textContent=session.program===JOINT_PROGRAM?"下肢关节居家训练":"原计划";
-      detail.textContent=item?`第 ${item.stage+1} 项 · ${schedule.stages[item.stage].name}，${session.snapshot.state==="ready"?"等待就位":"恢复后保持暂停"}。`:"可恢复进度，需明确确认后继续。";
+      detail.textContent=item?`第 ${item.stage+1} 项 · ${schedule.stages[item.stage].name}，组间休息 ${session.snapshot.groupRestSeconds??60} 秒，${session.snapshot.state==="ready"?"等待就位":"恢复后保持暂停"}。`:"可恢复进度，需明确确认后继续。";
       button.type="button";button.className="control";button.textContent=own?"查看本设备进度":"选择在本设备恢复";
       let confirm=false;
       button.addEventListener("click",()=>{
@@ -575,12 +591,14 @@
       const snapshot=await repository.claimSession(session.id,session.program);
       activateProgram(session.program);
       if(!engine.restore(snapshot))throw new Error("云端进度与当前计划不兼容，尚未开始训练。");
+      syncPlan();
       $("cloudPanel").hidden=true;setView("training",{focus:true});
     });
   }
   function restoreProgress(){
     const snapshot=store.loadProgress();if(snapshot===null)return;
     if(!engine.restore(snapshot)){showMessage("storageMessage","进度无法恢复，原数据和历史保留。");return;}
+    syncPlan();
     const existing=history.find(record=>record.id===engine.id||record.sessionId===engine.id);
     if(existing){engine.index=plan.length-1;engine.remaining=0;engine.state="finished";engine.completion=existing;savedCompletion=true;store.saveProgress(null);}
     else if(engine.state==="finished")finishSave();
@@ -592,7 +610,7 @@
       point.querySelector(".stage-number").textContent=i+1;point.querySelector(".stage-label").textContent=stage.short;$("stageProgress").append(point);
       const line=document.createElement("li"),name=document.createElement("span"),dose=document.createElement("span");name.className="routine-name";dose.className="routine-dose";
       name.textContent=`${stage.name}${stage.equipment?` · ${stage.equipment}`:""}`;
-      dose.textContent=program===PROGRAM?(i<4?"训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 60 秒。":"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮；前三轮结束后休息 30 秒，可跳过，第 4 轮后直接完成。"):(i<4?"训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 60 秒可跳过，节间休息 60 秒。":"每组 8 到 10 次，共 2 组。逐组点完成，不计时。");
+      dose.textContent=program===PROGRAM?(i<4?`训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 ${engine.groupRestSeconds} 秒，可跳过。`:"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮；前三轮结束后休息 30 秒，可跳过，第 4 轮后直接完成。"):(i<4?`训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 ${engine.groupRestSeconds} 秒可跳过，节间休息 60 秒。`:"每组 8 到 10 次，共 2 组。逐组点完成，不计时。");
       line.append(name,dose);$("routineList").append(line);
     });
     for(const [id,selected]of [["originalTab",program===PROGRAM],["jointTab",program===JOINT_PROGRAM]]){$(id).setAttribute("aria-selected",String(selected));$(id).tabIndex=selected?0:-1;}
@@ -600,9 +618,9 @@
   }
   function activateProgram(nextProgram){
     clearAudio();releaseWake();mediaState("paused");
-    program=nextProgram;stages=programs[program].stages;plan=programs[program].plan;prefix=program===PROGRAM?basePrefix:`${basePrefix}:joint`;
-    store=repository.forProgram(program);engine=new Engine(unitMs,program);history=store.history();savedCompletion=false;lastSave="";lastLane="";resumePosition=null;resumeStage=-1;
-    $("resetConfirm").hidden=true;showMessage("runtimeMessage","");savePreference();renderProgramDetails();restoreProgress();render();renderCalendar();
+    program=nextProgram;stages=programs[program].stages;prefix=program===PROGRAM?basePrefix:`${basePrefix}:joint`;
+    store=repository.forProgram(program);engine=new Engine(unitMs,program,preferredGroupRestSeconds);history=store.history();savedCompletion=false;lastSave="";lastLane="";resumePosition=null;resumeStage=-1;
+    $("resetConfirm").hidden=true;showMessage("runtimeMessage","");savePreference();syncPlan();restoreProgress();prepareHomeTraining();render();renderCalendar();
   }
   function chooseProgram(nextProgram){
     if(program===nextProgram)return;
@@ -628,11 +646,18 @@
     if(!activeTrack&&(isDebug||engine.state!=="cue"))speaker.cancel();
     clearTimeout(beepTimer);beepTimer=null;renderSound();soundMessage("");log("sound-off");
   }
+  $("groupRestSelect").addEventListener("change",()=>{
+    const selected=Number($("groupRestSelect").value);
+    if(restSelectionLocked()||!GROUP_REST_OPTIONS.includes(selected)){render();return;}
+    preferredGroupRestSeconds=selected;savePreference();
+    engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;lastSave="";resumePosition=null;resumeStage=-1;
+    syncPlan();render();log("group-rest-selected",{seconds:selected});
+  });
   $("startButton").addEventListener("click",()=>{
     if(!repository.canStart()){showMessage("startMessage",mode==="cloud"?"开始新的训练前，请先联网并解锁共享记录。已有暂停进度仍可继续。":"本地保存不可用，请检查浏览器存储后重试。");openCloud();return;}
     if(engine.state==="finished"){
       if(!savedCompletion){showMessage("startMessage","上一条完成记录尚未保留，请先重试保存。");view="training";render();return;}
-      engine.reset();savedCompletion=false;
+      engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;syncPlan();
     }
     const id=window.crypto?.randomUUID?.()||`session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     if(!engine.start(id))return;resumePosition=null;resumeStage=-1;view="training";savedCompletion=false;showMessage("startMessage","");showMessage("runtimeMessage","");
@@ -664,7 +689,7 @@
   $("confirmResetButton").addEventListener("click",()=>{
     if(engine.state==="finished"&&!savedCompletion){showMessage("storageMessage","完成记录尚未保存，请重试保存后返回。");$("resetConfirm").hidden=true;render();return;}
     if(!store.saveProgress(null)){storageWarning("进度未清除，仍保留当前训练。");return;}
-    clearAudio();releaseWake();engine.reset();resumePosition=null;resumeStage=-1;lastSave="";savedCompletion=false;$("resetConfirm").hidden=true;setView("home",{focus:true});log("reset");
+    clearAudio();releaseWake();engine=new Engine(unitMs,program,preferredGroupRestSeconds);syncPlan();resumePosition=null;resumeStage=-1;lastSave="";savedCompletion=false;$("resetConfirm").hidden=true;setView("home",{focus:true});log("reset");
   });
   $("retrySaveButton").addEventListener("click",()=>{showMessage("storageMessage","");if(!savedCompletion)finishSave();else runCloudAction($("retrySaveButton"),()=>repository.flush());});
   $("homeNav").addEventListener("click",()=>setView("home"));$("recordsNav").addEventListener("click",()=>setView("records"));
@@ -713,11 +738,11 @@
   window.addEventListener("pagehide",()=>{pause("离开页面，已暂停。",true);clearAudio();releaseWake();});
   window.addEventListener("online",()=>{repository.flush().catch(()=>{});});
   window.addEventListener("storage",()=>{history=store.history();if(view==="records")renderCalendar();renderCloud();});
-  renderProgramDetails();restoreProgress();appReady=true;render();renderCalendar();renderCloud();
+  renderProgramDetails();restoreProgress();prepareHomeTraining();appReady=true;render();renderCalendar();renderCloud();
   if(isTest||mode==="local"){$("debugBadge").hidden=false;text("debugBadge",isDebug?`隔离测试 · ${unitMs} ms/秒 · 无声音`:isTest?"隔离测试 · 真实秒长与声音":"本地隔离预览 · 不同步正式记录");}
   repository.init().then(()=>{history=store.history();renderCalendar();render();renderCloud();}).catch(()=>renderCloud());
   window.__rehabTimer={
-    get config(){return {debug:isDebug,test:isTest,unitMs,prefix,program,mode,totalSeconds:plan.reduce((n,p)=>n+p.seconds,0)};},events,
+    get config(){return {debug:isDebug,test:isTest,unitMs,prefix,program,mode,groupRestSeconds:engine.groupRestSeconds,totalSeconds:plan.reduce((n,p)=>n+p.seconds,0)};},events,
     getPlan:()=>plan.map(p=>({...p})),
     getState:()=>({...engine.snapshot(),runState:engine.state,view,savedCompletion,soundEnabled,mediaState:speaker.failed?"unavailable":$("cueAudio").paused?"paused":"playing",mediaJob:speaker.job?.key||null,pendingBeep,historyCount:history.length,syncState:repository.status().state})
   };

@@ -14,7 +14,8 @@
 - `POST /api/logout` 输入 `{}`，成功清除 Cookie。
 - `GET /api/state` 返回 `{ok:true,environment,records,sessions}`。
 - 会话为 `{id,program,status,snapshot,revision,writerEpoch,updatedAt}`，`status` 为 `active`、`completed`、`abandoned`。
-- 快照与训练核心一致：`{version:1,planRevision:2,program,unitMs:1000,id,index,remaining,state,completion}`。
+- 快照与训练核心一致：`{version:1,planRevision:2,program,unitMs:1000,groupRestSeconds,id,index,remaining,state,completion}`。
+- `groupRestSeconds` 只接受数值 60、90、120、150；缺少此字段的旧快照按 60 秒恢复。
 - `records` 包含撤销记录，以 `{id,program,date,finishedAt,source,timeZone,revoked,revokedAt}` 表示。
 - `source` 为 `training`、`manual`、`legacy`，`finishedAt` 对手工补记可为 null，旧时区用 null。
 - 客户端统计时仅使用 `revoked === false` 的记录。
@@ -46,6 +47,8 @@
 日期不得晚于全球当前最早进入的日历日期，完成时间不得明显晚于服务器当前时间。
 create 可接受实际训练中途的非 finished 快照，离线开始后上传无需回放。
 终态不可恢复；迟到进度及旧 epoch 均返回冲突。
+create 或 import 确定本次训练的 groupRestSeconds，此后 progress 和 complete 不能改变；不一致返回 409 `session_settings_changed`，原会话和记录保持不变。
+claim、刷新恢复和幂等重放均保留本次训练的设置，不使用接管设备的首页偏好覆盖。
 
 ## 旧数据导入
 
@@ -84,7 +87,9 @@ operation_log 保存操作摘要和原始成功响应，不能在正常清理中
 planRevision 与记录格式 version 分开管理。
 当前所有新快照输出 planRevision:2，完成记录的 version 仍为 1。
 原计划第五项在前三轮踮脚和拉伸之后各增加 30 秒 round-rest，可明确跳过，第四轮拉伸后直接完成。
-新原计划共 104 段、固定计时 1520 秒；下肢关节计划仍为 99 段。
+新原计划共 104 段，默认 60 秒组间休息时固定计时 1520 秒；下肢关节计划仍为 99 段。
+两套计划前四项的 group-rest 随 groupRestSeconds 调整，stage-rest 仍为 60 秒，round-rest 仍为 30 秒。
+四档组间休息不改变分段索引，planRevision 保持 2，不需要数据库表结构迁移。
 
 没有 planRevision 或显式 planRevision:1 的快照，必须先按旧的 101 段原计划校验。
 第五项旧索引 93、94、95、96、97、98、99、100 对应新索引 93、94、96、97、99、100、102、103。
