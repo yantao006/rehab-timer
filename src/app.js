@@ -305,7 +305,7 @@
       if(cell.today)el.setAttribute("aria-current","date");
       el.addEventListener("click",()=>{selectedDate=cell.date;renderCalendar();const selected=grid.querySelector(`[data-date="${selectedDate}"]`);selected?.focus({preventScroll:true});});
       const number=document.createElement("span");number.textContent=cell.day;el.append(number);
-      if(cell.today||cell.complete){const label=document.createElement("small");label.textContent=cell.today?(cell.complete?"今天·完成":"今天"):"完成";el.append(label);}grid.append(el);
+      if(cell.today||cell.complete){const label=document.createElement("small");label.textContent=cell.today?(cell.complete?"今天\n完成":"今天"):"完成";el.append(label);}grid.append(el);
     }
     const daily=history.filter(record=>record.date===selectedDate).sort((a,b)=>String(a.finishedAt).localeCompare(String(b.finishedAt)));
     text("dateDetailsTitle",`${selectedDate} · ${daily.length} 次完成`);
