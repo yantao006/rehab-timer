@@ -1,7 +1,9 @@
 """Build background-safe stage tracks from the actual inline schedule and local WAVs.
 Requires Node.js, Python 3 and ffmpeg; no network or TTS generation.
-Run: python3 scripts/generate-stage-tracks.py
+Run: node scripts/build.mjs
+     python3 scripts/generate-stage-tracks.py [--track stage-5]
 """
+import argparse
 import json
 import pathlib
 import subprocess
@@ -9,16 +11,28 @@ import tempfile
 import wave
 
 root = pathlib.Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--track', action='append', help='Regenerate only this named track; repeat to select several.')
+args = parser.parse_args()
 script = """
 const fs = require('node:fs'), vm = require('node:vm');
 const html = fs.readFileSync('index.html','utf8');
-vm.runInThisContext(html.match(/<script id="rehab-core">([\\s\\S]*?)<\\/script>/)[1]);
+const source = fs.readFileSync('src/core.js','utf8');
+const inline = html.match(/<script id="rehab-core">([\\s\\S]*?)<\\/script>/)?.[1];
+if (!inline || inline.trim() !== source.trim()) throw new Error('The shipped schedule is stale. Run node scripts/build.mjs first.');
+vm.runInThisContext(inline);
 console.log(JSON.stringify([
   ...RehabCore.stages.map((_,i)=>({name:`stage-${i+1}`,track:RehabCore.stageTrack(i)})),
   ...RehabCore.jointStages.slice(0,4).map((_,i)=>({name:`stage-joint-${i+1}`,track:RehabCore.stageTrack(i,RehabCore.JOINT_PROGRAM)}))
 ]));
 """
 tracks = json.loads(subprocess.check_output(['node', '-e', script], cwd=root))
+if args.track:
+    available = {item['name'] for item in tracks}
+    unknown = set(args.track) - available
+    if unknown:
+        parser.error(f"Unknown track: {', '.join(sorted(unknown))}")
+    tracks = [item for item in tracks if item['name'] in set(args.track)]
 rate = 44100
 for item in tracks:
     name, track = item['name'], item['track']

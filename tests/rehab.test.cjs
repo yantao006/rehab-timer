@@ -64,10 +64,10 @@ test('五个完整身份、左侧与器材保留', () => {
     ['左小腿踮脚静力训练 → 左小腿拉伸', '']
   ]);
 });
-test('实际完整执行：101 段，1430 秒，四次手动项间等待', () => {
+test('实际完整执行：104 段，1520 秒，四次手动项间等待', () => {
   const { seen, waits } = finishAll();
-  assert.equal(seen.length, 101); assert.equal(waits, 4);
-  assert.equal(seen.reduce((sum, p) => sum + p.seconds, 0), 1430);
+  assert.equal(seen.length, 104); assert.equal(waits, 4);
+  assert.equal(seen.reduce((sum, p) => sum + p.seconds, 0), 1520);
   assert.deepEqual(seen[0], { stage: 0, kind: 'prep', seconds: 30, index: 0 });
   assert.equal(seen.filter(p => p.kind === 'prep').length, 1);
 });
@@ -125,7 +125,12 @@ test('下肢前四节末次直接60秒组休或节休，原计划组休不变，
   }
   assert.deepEqual(plain(jointPlan.filter(p => p.stage === 4).map(p => [p.group,p.kind,p.seconds])), [[1,'manual',0],[2,'manual',0]]);
   assert.equal(e.state,'manual');
-  assert.equal(e.completeManual(FINISH),'manual'); assert.equal(e.completion,null);
+  assert.equal(e.completeManual(FINISH),'ready'); assert.equal(e.completion,null);
+  assert.equal(e.completeManual(FINISH),false); // A double tap cannot finish the next group.
+  const restored = new Engine(1000, JOINT_PROGRAM);
+  assert.equal(restored.restore(e.snapshot()),true);
+  assert.equal(restored.state,'ready');
+  assert.equal(e.continue(),true); e.state='manual';
   assert.equal(e.completeManual(FINISH),'finished'); assert.equal(e.completion.date,localDate(FINISH));
 });
 test('下肢组休可跳过到同节第二组，节间休息不能跳过', () => {
@@ -138,12 +143,12 @@ test('下肢组休可跳过到同节第二组，节间休息不能跳过', () =>
   assert.equal(e.skip('stage-rest',e.lastNow+100),false);
   assert.equal(e.completion,null);
 });
-test('第五项四轮踮脚/拉伸自动交替，无休息或手动等待插入', () => {
+test('第五项每轮踮脚拉伸后休息30秒，前三轮有休息，第四轮结束直接完成', () => {
   const { seen } = finishAll();
   assert.deepEqual(seen.filter(p => p.stage === 4).map(p => [p.round,p.kind,p.action,p.seconds]), [
-    [1,'work','左小腿踮脚静力训练',30], [1,'stretch','左小腿拉伸',30],
-    [2,'work','左小腿踮脚静力训练',30], [2,'stretch','左小腿拉伸',30],
-    [3,'work','左小腿踮脚静力训练',30], [3,'stretch','左小腿拉伸',30],
+    [1,'work','左小腿踮脚静力训练',30], [1,'stretch','左小腿拉伸',30], [1,'round-rest',undefined,30],
+    [2,'work','左小腿踮脚静力训练',30], [2,'stretch','左小腿拉伸',30], [2,'round-rest',undefined,30],
+    [3,'work','左小腿踮脚静力训练',30], [3,'stretch','左小腿拉伸',30], [3,'round-rest',undefined,30],
     [4,'work','左小腿踮脚静力训练',30], [4,'stretch','左小腿拉伸',30]
   ]);
 });
@@ -221,7 +226,7 @@ test('加速短段也不能因一次延迟跳过未做段', () => {
 });
 test('最后拉伸必须全部完成，最后一秒延迟也不能假完成', () => {
   const e = running();
-  while (e.index < 100) {
+  while (e.index < plan.length - 1) {
     const end=e.deadline, result=exhaust(e);
     if (result==='ready') e.continue();
     if (e.state==='cue') e.arm(end);
@@ -282,7 +287,7 @@ test('完成写入中断：终态进度重放后仍一次记录并保留原完�
 });
 test('格式损坏、版本不符、越界/伪终态等进度不恢复且不损坏历史', () => {
   const base = running().snapshot();
-  for (const patch of [{version:2},{program:'old'},{unitMs:100},{index:101},{index:-1},{remaining:-1},{remaining:Infinity},{remaining:30001},{state:'unknown'},{state:'finished'},{state:'ready'},{id:'bad'},{completion:{}}]) {
+  for (const patch of [{version:2},{program:'old'},{unitMs:100},{index:104},{index:-1},{remaining:-1},{remaining:Infinity},{remaining:30001},{state:'unknown'},{state:'finished'},{state:'ready'},{id:'bad'},{completion:{}}]) {
     assert.equal(new Engine().restore({...base,...patch}),false,JSON.stringify(patch));
   }
   assert.equal(new Engine().restore(null),false);
@@ -436,6 +441,13 @@ test('红框内容连同容器删除，详情仍可查看，声音恢复操作�
 });
 
 const appFixture = require('./app-fixture.cjs');
+test('无效测试参数也隔离，页面不把本地保存标成云端同步', async () => {
+  for(const search of ['?test=10','?test=0','?debugMs=1000','?debugMs=bad']) {
+    const f=appFixture({search,protocol:'https:'});await f.click('startButton');
+    assert.equal(f.context.__rehabTimer.config.mode,'local');
+    assert.equal(f.elements.get('persistenceNote').textContent,'本地隔离预览，不会写入正式云端记录。');
+  }
+});
 test('真实页面控制器：首次点击启动连续阶段音轨，隐藏页面不靠回调暂停', async () => {
   const f=appFixture(); await f.click('startButton');
   assert.deepEqual(f.requests[0],{key:'stage-1',at:0,gesture:true});
@@ -482,6 +494,110 @@ test('连续音轨暂停后刷新仍需手动继续，重置不新增历史', as
   await restored.click('resetButton'); await restored.click('confirmResetButton');
   assert.equal(restored.state().runState,'idle'); assert.equal(restored.state().historyCount,0);
   assert.equal(storage.get('rehab-timer:v1:sentinel'),'synthetic-do-not-touch');
+});
+
+test('真实页面控制器：切换计划保留暂停进度，方向键只移动焦点，刷新记住选择', async () => {
+  const storage=new Map(),f=appFixture({storage});
+  await f.click('startButton');await f.advance(2000);await f.click('backTrainingButton');
+  const snapshot=f.state();assert.equal(snapshot.runState,'paused');
+  await f.key('originalTab','ArrowRight');
+  assert.equal(f.state().program,snapshot.program);
+  assert.equal(f.context.document.activeElement,f.elements.get('jointTab'));
+  await f.click('jointTab');assert.equal(f.state().runState,'idle');
+  const reopened=appFixture({storage});assert.equal(reopened.context.__rehabTimer.config.program,context.RehabCore.JOINT_PROGRAM);
+  await f.click('originalTab');
+  assert.equal(f.state().id,snapshot.id);assert.equal(f.state().remaining,snapshot.remaining);
+  assert.equal(f.state().runState,'paused');
+  await f.click('resumeButton');assert.equal(f.state().runState,'paused');
+  await f.click('continueButton');assert.equal(f.requests.at(-1).gesture,true);
+});
+
+test('真实页面控制器：结束后重开清除旧音轨位置，新会话完整执行准备', async () => {
+  const f=appFixture();await f.click('startButton');await f.advance(70000);
+  const previous=f.state();assert.ok(previous.index>0);
+  await f.click('resetButton');await f.click('confirmResetButton');await f.click('startButton');
+  await f.advance(1000);
+  assert.notEqual(f.state().id,previous.id);assert.equal(f.state().index,0);
+  assert.equal(f.state().runState,'running');assert.ok(f.state().remaining>29000);
+  assert.equal(f.events().filter(event=>event.type==='track-start').at(-1).position,0);
+});
+
+function finalStageRecovery() {
+  const storage=new Map(),f=appFixture({storage}),program=f.context.RehabCore.PROGRAM;
+  const repo=f.context.RehabPersistence.create({mode:'local',storage:f.context.localStorage,prefix:f.context.__rehabTimer.config.prefix});
+  const snapshot={version:1,planRevision:2,program,unitMs:1000,id:'synthetic-seek-recovery',index:103,remaining:1000,state:'paused',completion:null};
+  assert.equal(repo.forProgram(program).saveProgress(snapshot,true),true);
+  return {storage,snapshot};
+}
+test('轮休到时自动进入下一轮；过期跳过点击不跳动作，第四轮没有额外休息', () => {
+  for (const index of [95,98,101]) {
+    const e=new Engine();
+    assert.equal(e.restore({version:1,planRevision:2,program:context.RehabCore.PROGRAM,unitMs:1000,id:ID,index,remaining:100,state:'paused',completion:null}),true);
+    assert.equal(e.continue(),true);e.arm(0);
+    assert.equal(e.skip('round-rest',100),false);
+    assert.equal(e.index,index+1);assert.equal(e.interval.kind,'work');
+    assert.equal(e.interval.round,(index-95)/3+2);assert.equal(e.remaining,30000);
+    assert.equal(e.skip('round-rest',100),false);assert.equal(e.completion,null);
+  }
+  assert.equal(plan.at(-1).kind,'stretch');assert.equal(plan.at(-1).round,4);
+});
+test('真实页面控制器：轮休恢复、八格动作进度与跳过后手势音轨不回退', async () => {
+  const {storage,snapshot}=finalStageRecovery(),seed=appFixture({storage});
+  const repo=seed.context.RehabPersistence.create({mode:'local',storage:seed.context.localStorage,prefix:seed.context.__rehabTimer.config.prefix});
+  repo.forProgram(snapshot.program).saveProgress({...snapshot,index:95,remaining:12345},true);
+  const f=appFixture({storage,protocol:'https:',nativeSeekFailure:true});
+  await f.click('resumeButton');await f.click('continueButton');await f.advance(1000);
+  assert.equal(f.state().index,95);assert.equal(f.elements.get('skipRestButton').hidden,false);
+  assert.equal(f.elements.get('skipRestButton').textContent,'跳过轮间休息');
+  assert.match(f.elements.get('positionCopy').textContent,/第 1\/4 轮已完成/);
+  const cells=f.elements.get('laneProgress').children.at(-1).children;
+  assert.equal(cells.length,8);assert.equal(cells.filter(cell=>cell.dataset.state==='complete').length,2);
+  await f.click('skipRestButton');await f.click('skipRestButton');await f.advance(2000);
+  assert.equal(f.state().index,96);assert.equal(f.state().runState,'running');
+  assert.equal(f.elements.get('skipRestButton').hidden,true);assert.equal(f.state().historyCount,0);
+  assert.equal(f.events().filter(event=>event.type==='rest-skipped').length,1);
+  assert.equal(f.requests.filter(request=>request.key==='calf-raise').length,1);
+  assert.equal(f.requests.find(request=>request.key==='calf-raise').gesture,true);
+});
+test('托管末段恢复先同步播放提示，再从完整音轨定位，不受原生HTTP定位回零影响', async () => {
+  const {storage}=finalStageRecovery();
+  const f=appFixture({storage,protocol:'https:',nativeSeekFailure:true});
+  await f.click('resumeButton');await f.click('continueButton');
+  assert.equal(f.requests[0].key,'stretch');assert.equal(f.requests[0].gesture,true);
+  await f.advance(3000);
+  assert.equal(f.state().runState,'finished');assert.equal(f.state().historyCount,1);
+  assert.ok(f.fetchRequests.includes('audio/stage-5.mp3'));
+  assert.equal(f.events().filter(event=>event.type==='track-start').at(-1).seekableSource,true);
+});
+test('恢复音轨定位回零或加载失败时保留末段快照，不能回到第一轮或生成完成', async () => {
+  for(const fault of [{blobSeekFailure:true},{stageFetchFailure:true}]) {
+    const {storage,snapshot}=finalStageRecovery();
+    const f=appFixture({storage,protocol:'https:',...fault});
+    await f.click('resumeButton');await f.click('continueButton');await f.advance(15000);
+    assert.equal(f.state().runState,'paused');assert.equal(f.state().index,snapshot.index);
+    assert.equal(f.state().remaining,snapshot.remaining);assert.equal(f.state().historyCount,0);
+  }
+});
+
+test('真实页面控制器：下肢完整音轨四次手动边界，第五项双击不能完成第二组，刷新保留就位', async () => {
+  const storage=new Map(),f=appFixture({storage});await f.click('jointTab');await f.click('startButton');
+  assert.equal(f.requests[0].key,'stage-joint-1');assert.equal(f.requests[0].gesture,true);
+  for(let stage=0;stage<4;stage++) {
+    const track=context.RehabCore.stageTrack(stage,context.RehabCore.JOINT_PROGRAM);
+    await f.advance((track.duration+2)*1000);
+    assert.equal(f.state().runState,'ready');
+    const index=f.state().index;await f.advance(60000);assert.equal(f.state().index,index);
+    await f.click('continueButton');
+  }
+  assert.equal(f.state().runState,'manual');assert.equal(f.state().index,97);
+  await f.click('completeButton');await f.click('completeButton');
+  assert.equal(f.state().runState,'ready');assert.equal(f.state().historyCount,0);
+  const restored=appFixture({storage});assert.equal(restored.state().runState,'ready');
+  assert.equal(restored.state().index,98);assert.equal(restored.requests.length,0);
+  await restored.click('resumeButton');await restored.click('continueButton');await restored.advance(1000);
+  assert.equal(restored.state().runState,'manual');await restored.click('completeButton');
+  assert.equal(restored.state().runState,'finished');assert.equal(restored.state().historyCount,1);
+  await restored.click('completeButton');assert.equal(restored.state().historyCount,1);
 });
 
 test('时区改变与夏令时附近日期不由UTC切片计算', () => {
