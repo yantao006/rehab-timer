@@ -3,6 +3,7 @@
       "use strict";
       const VERSION = 1;
       const PLAN_REVISION = 2;
+      const GROUP_REST_OPTIONS = Object.freeze([60, 90, 120, 150]);
       const PROGRAM = "five-stage-v1";
       const JOINT_PROGRAM = "lower-limb-joints-v1";
       const stages = [
@@ -58,6 +59,14 @@
         [PROGRAM]: { stages, plan },
         [JOINT_PROGRAM]: { stages: jointStages, plan: jointPlan }
       });
+      const plans = new Map();
+      function planFor(program = PROGRAM, groupRestSeconds = 60) {
+        if (!programs[program]) throw new Error("unknown program");
+        if (!GROUP_REST_OPTIONS.includes(groupRestSeconds)) throw new Error("invalid group rest");
+        const key = `${program}:${groupRestSeconds}`;
+        if (!plans.has(key)) plans.set(key,Object.freeze(programs[program].plan.map(item => item.kind === "group-rest" ? Object.freeze({...item,seconds:groupRestSeconds}) : item)));
+        return plans.get(key);
+      }
       const localDate = date => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
       const validDate = value => {
         if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -84,7 +93,7 @@
         return records.filter(r => r.date >= localDate(start) && r.date < localDate(end)).length;
       };
       class Engine {
-        constructor(unitMs = 1000, program = PROGRAM) { if (!programs[program]) throw new Error("unknown program"); this.unitMs = unitMs; this.program = program; this.plan = programs[program].plan; this.reset(); }
+        constructor(unitMs = 1000, program = PROGRAM, groupRestSeconds = 60) { this.plan = planFor(program,groupRestSeconds); this.unitMs = unitMs; this.program = program; this.groupRestSeconds = groupRestSeconds; this.reset(); }
         reset() { this.state = "idle"; this.id = null; this.index = 0; this.remaining = 30*this.unitMs; this.deadline = null; this.lastNow = null; this.resumeState = "cue"; this.completion = null; this.reason = ""; }
         get interval() { return this.plan[this.index]; }
         start(id) { if (this.state !== "idle" || !validId(id)) return false; this.id = id; this.state = "cue"; return true; }
@@ -150,18 +159,22 @@
         }
         snapshot() {
           if (this.state === "idle") return null;
-          return { version: VERSION, planRevision: PLAN_REVISION, program: this.program, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
+          return { version: VERSION, planRevision: PLAN_REVISION, groupRestSeconds: this.groupRestSeconds, program: this.program, unitMs: this.unitMs, id: this.id, index: this.index, remaining: this.remaining, state: this.state, completion: this.completion };
         }
         restore(s) {
           if (!s || (s.planRevision !== undefined && ![1, PLAN_REVISION].includes(s.planRevision))) return false;
+          const groupRestSeconds = s.groupRestSeconds === undefined ? 60 : s.groupRestSeconds;
+          if (!GROUP_REST_OPTIONS.includes(groupRestSeconds)) return false;
           const legacy = s.planRevision === undefined || s.planRevision === 1;
-          const schedule = legacy && this.program === PROGRAM ? legacyPlan : this.plan;
+          const selectedPlan = planFor(this.program,groupRestSeconds);
+          const schedule = legacy && this.program === PROGRAM ? legacyPlan.map(item => item.kind === "group-rest" ? {...item,seconds:groupRestSeconds} : item) : selectedPlan;
           if (!s || s.version !== VERSION || s.program !== this.program || s.unitMs !== this.unitMs || !validId(s.id) || !Number.isInteger(s.index) || !schedule[s.index] || !Number.isFinite(s.remaining) || s.remaining < 0 || s.remaining > schedule[s.index].seconds*this.unitMs || !["cue","running","paused","ready","manual","finished"].includes(s.state)) return false;
           if (s.state === "finished" && (s.index !== schedule.length-1 || s.remaining !== 0 || !validRecord(s.completion) || s.completion.id !== s.id)) return false;
           if (s.state !== "finished" && (s.completion !== null || (schedule[s.index].kind !== "manual" && s.remaining <= 0))) return false;
           if (s.state === "manual" && schedule[s.index].kind !== "manual") return false;
           const manualGroupBoundary = schedule[s.index].kind === "manual" && schedule[s.index].group === 2 && schedule[s.index-1]?.kind === "manual";
           if (s.state === "ready" && (s.index === 0 || (!manualGroupBoundary && schedule[s.index-1].stage === schedule[s.index].stage) || s.remaining !== schedule[s.index].seconds*this.unitMs)) return false;
+          this.groupRestSeconds = groupRestSeconds; this.plan = selectedPlan;
           this.id = s.id; this.index = legacy && this.program === PROGRAM && s.index >= 93 ? s.index + Math.floor((s.index - 93) / 2) : s.index; this.remaining = s.remaining; this.completion = s.completion;
           this.state = s.state === "finished" ? "finished" : s.state === "ready" ? "ready" : "paused";
           this.deadline = null; this.lastNow = null; this.reason = "进度已恢复。";
@@ -321,8 +334,8 @@
         }
       }
       // Continuous stage media: silence, speech and beeps share one playback clock.
-      function stageTrack(stage, program = PROGRAM) {
-        const schedule = programs[program].plan;
+      function stageTrack(stage, program = PROGRAM, groupRestSeconds = 60) {
+        const schedule = planFor(program,groupRestSeconds);
         let end = 0;
         const entries = [], sounds = [];
         for (const item of schedule.filter(p => p.stage === stage && p.kind !== "manual")) {
@@ -338,5 +351,5 @@
         sounds.push({ key, at:end });
         return { entries, sounds, end, duration:end+cues[key][1]/1000+.25 };
       }
-      return { VERSION, PLAN_REVISION, PROGRAM, JOINT_PROGRAM, programs, stages, plan, jointStages, jointPlan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
+      return { VERSION, PLAN_REVISION, GROUP_REST_OPTIONS, PROGRAM, JOINT_PROGRAM, programs, planFor, stages, plan, jointStages, jointPlan, Engine, Store, MediaChannel, cues, cueFor, stageTrack, localDate, validDate, monthCells, weeklyCount };
     })();

@@ -92,7 +92,7 @@ function runtime({storage=new Storage(),api=new API(),mode='cloud',prefix='rehab
   vm.runInContext(coreSource,context); vm.runInContext(source,context);
   const repo=context.RehabPersistence.create({storage,mode,prefix,fetch:api.fetch.bind(api),now:()=>clock,uuid:()=>`synthetic-${instance}-${String(++serial).padStart(12,'0')}`,onChange,onStatus,setTimeout,clearTimeout,...timers});
   const core=context.RehabCore;
-  function snapshot(id='session-00000001',program=core.PROGRAM) { const e=new core.Engine(1000,program); e.start(id); e.arm(0); return plain(e.snapshot()); }
+  function snapshot(id='session-00000001',program=core.PROGRAM,groupRestSeconds=60) { const e=new core.Engine(1000,program,groupRestSeconds); e.start(id); e.arm(0); return plain(e.snapshot()); }
   function finish(id='session-00000001',program=core.PROGRAM) { const s=snapshot(id,program); s.index=core.programs[program].plan.length-1; s.remaining=0; s.state='finished'; s.completion={version:1,id,date:'2026-09-07',finishedAt:new Date(NOW).toISOString()}; return s; }
   return {repo,storage,api,core,snapshot,finish,advance(ms){clock+=ms;},store:repo.forProgram(core.PROGRAM),joint:repo.forProgram(core.JOINT_PROGRAM)};
 }
@@ -101,6 +101,28 @@ function finishLocally(f,id='session-00000001',program=f.core.PROGRAM) {
   const store=f.repo.forProgram(program),snapshot=f.finish(id,program);
   assert.equal(store.saveProgress(snapshot,true),true); assert.equal(store.complete(snapshot.completion),true); assert.equal(store.saveProgress(null),true);
 }
+
+test('本次组间休息随快照恢复，本地拒绝中途换档而保留原进度',async()=>{
+  const f=runtime({mode:'local'}); await f.repo.init();
+  const snapshot=f.snapshot('custom-rest-local-001',f.core.PROGRAM,150);
+  Object.assign(snapshot,{index:f.core.planFor(f.core.PROGRAM,150).findIndex(item=>item.kind==='group-rest'),remaining:143000,state:'paused'});
+  assert.equal(f.store.saveProgress(snapshot,true),true);
+  const reload=runtime({mode:'local',storage:f.storage}); await reload.repo.init();
+  assert.deepEqual(plain(reload.store.loadProgress()),snapshot);
+  assert.equal(reload.store.saveProgress({...snapshot,groupRestSeconds:90,remaining:80000},true),false);
+  assert.deepEqual(plain(reload.store.loadProgress()),snapshot);
+  assert.match(reload.repo.status().message,/本次训练的组间休息已固定/);
+  assert.equal(f.api.calls.length,0);
+});
+test('旧快照缺少组间休息时默认60秒且原始缓存和迁移备份不改写',async()=>{
+  const f=runtime(),old=f.snapshot('old-no-group-rest-001'); delete old.groupRestSeconds;
+  const snapshotKey=`${f.repo.prefix}:snapshot:${f.core.PROGRAM}:${old.id}`;
+  f.storage.setItem(snapshotKey,JSON.stringify(old)); f.storage.setItem(`${f.repo.prefix}:active:${f.core.PROGRAM}`,JSON.stringify(old.id));
+  assert.equal(f.store.loadProgress().groupRestSeconds,60); assert.equal(f.storage.getItem(snapshotKey),JSON.stringify(old));
+  f.storage.setItem('rehab-timer:v1:progress',JSON.stringify(old));
+  const preview=f.repo.scanLegacy(); assert.equal(preview.counts.issues,0); assert.equal(preview.progress[0].snapshot.groupRestSeconds,60);
+  assert.equal(f.storage.getItem('rehab-timer:v1:progress'),JSON.stringify(old));
+});
 
 test('local、file 和测试参数强制隔离，不读取正式历史且不发送 API',async()=>{
   for (const args of [{mode:'local'},{location:{protocol:'file:',search:''}},{location:{protocol:'https:',search:'?test=1'}},{location:{protocol:'https:',search:'?debugMs=100'}},{prefix:'rehab-timer:test:v1:100'}]) {

@@ -28,12 +28,12 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0
   media.pause=()=>{media.paused=true;clearMediaTimers();media.listeners.pause?.();};
   media.load=()=>{media.pause();media.currentTime=0;};
   media.play=()=>{
-    const stage=media.src.match(/stage-(joint-)?(\d+)\.mp3$/);
+    const stage=media.src.match(/stage-(joint-)?(\d+)(?:-rest-(90|120|150))?\.mp3$/);
     if (stage) {
-      const key=`stage-${stage[1]||''}${stage[2]}`; requests.push({key,at:now,gesture});
+      const key=`stage-${stage[1]||''}${stage[2]}${stage[3]?`-rest-${stage[3]}`:''}`; requests.push({key,at:now,gesture});
       if(rejectPlay) return Promise.reject({name:'NotAllowedError'});
       clearMediaTimers();
-      const track=context.RehabCore.stageTrack(Number(stage[2])-1,stage[1]?context.RehabCore.JOINT_PROGRAM:context.RehabCore.PROGRAM);
+      const track=context.RehabCore.stageTrack(Number(stage[2])-1,stage[1]?context.RehabCore.JOINT_PROGRAM:context.RehabCore.PROGRAM,Number(stage[3]||60));
       media.onloadedmetadata?.();
       if(media.src.startsWith('blob:')?blobSeekFailure:nativeSeekFailure)media.currentTime=0;
       const start=Math.max(0,Number(media.currentTime)||0), started=now;
@@ -83,6 +83,7 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0
     fail(value){rejectPlay=value;}, stall(value){stuck=value;},
     async click(id) { gesture=true;elements.get(id).listeners.click({currentTarget:elements.get(id),preventDefault(){}});gesture=false;await flush(); },
     async key(id,key) { elements.get(id).listeners.keydown({key,preventDefault(){}});await flush(); },
+    async select(id,value) { const element=elements.get(id);element.value=String(value);element.listeners.change({target:element,currentTarget:element});await flush(); },
     async visibility(hidden) {document.hidden=hidden;documentEvents.visibilitychange();await flush();},
     async advance(ms) {
       const target=now+ms; await flush();
