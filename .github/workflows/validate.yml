@@ -12,6 +12,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: 领域行为测试与内联脚本语法检查
-        run: node --test tests/rehab.test.cjs
+          node-version: 24
+      - name: 源码与发布文件一致性、训练规则、同步及数据库测试
+        run: npm run validate

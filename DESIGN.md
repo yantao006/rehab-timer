@@ -17,9 +17,9 @@ colors:
 typography:
   display:
     fontFamily: "Kaiti SC, STKaiti, KaiTi, serif"
-    fontSize: "clamp(2.55rem, 7vw, 5.4rem)"
+    fontSize: "clamp(2rem, 4.2vw, 3.15rem)"
     fontWeight: 700
-    lineHeight: 0.98
+    lineHeight: 1.1
     letterSpacing: "-0.04em"
   body:
     fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif"
@@ -28,14 +28,14 @@ typography:
     lineHeight: 1.7
   measurement:
     fontFamily: "Avenir Next Condensed, DIN Condensed, Arial Narrow, sans-serif"
-    fontSize: "clamp(5rem, 21vw, 6rem)"
+    fontSize: "6.2rem"
     fontWeight: 800
-    lineHeight: 0.82
+    lineHeight: 0.95
     letterSpacing: "-0.04em"
 rounded:
-  control: "999px"
+  control: "15px"
   panel: "26px"
-  calendar: "8px"
+  calendar: "9px"
 spacing:
   compact: "12px"
   standard: "24px"
@@ -44,14 +44,14 @@ components:
   button-primary:
     backgroundColor: "{colors.signal}"
     textColor: "{colors.pool-dark}"
-    rounded: "{rounded.panel}"
-    padding: "34px"
-  button-reset:
-    backgroundColor: "{colors.foam}"
-    textColor: "{colors.danger}"
     rounded: "{rounded.control}"
-    padding: "0 24px"
-    height: "52px"
+    padding: "12px 20px"
+  button-reset:
+    backgroundColor: "transparent"
+    textColor: "{colors.danger}"
+    rounded: "0"
+    padding: "8px 4px"
+    height: "44px"
   scoreboard:
     backgroundColor: "{colors.pool-deep}"
     textColor: "{colors.foam}"
@@ -60,140 +60,148 @@ components:
 
 # Design System: 康复训练计时器
 
-## Overview
+## 视觉方向
 
-**Creative North Star: "The Aquatic Therapy Pace Board"**
+延续「水疗泳道计分板」的视觉身份，以清楚的阶段、组次和数字支持训练期间的一瞥。
+水蓝色瓷砖背景、深蓝计分板和克制的泳道标记形成主体，安全橙用于当下最重要的操作与活动进度。
+界面应在用户准备时提供足够信息，在音频开始引导后降低阅读负担。
+不使用圆形进度环、装饰性成就卡片、励志口号或游戏化反馈。
 
-The interface borrows the legibility, lane markers, and decisive timing language of a pool-deck pace board.
-It feels bright enough for an active training room, tactile enough for one deliberate tap, and quiet enough to disappear once audio takes over.
-It rejects the generic circular progress timer in favor of a split scoreboard that keeps phase, repetition, and time immediately legible.
+## 色彩与字形
 
-**Key Characteristics:**
+颜色使用文首已有调色板，生产样式的具体值以 `src/styles.css` 为准。
+深蓝承载训练阶段与计时，泡沫白和浅瓷砖色承载选择、记录与辅助操作。
+安全橙只强调当前主操作和活动进度，错误、撤销和结束使用危险红文字，不把普通状态都染成警报色。
+状态必须有明确文字，不能仅依靠颜色表达同步、完成或冲突。
 
-- Chlorine tile and deep lane blue form the dominant field.
-- Safety orange is reserved for the action and active repetition.
-- Rope markers and split-time bars make progress physical rather than ornamental.
-- One scoreboard reveal is the authored motion moment.
+主标题、训练阶段与完成标题使用设备已有的楷体字族，不加载网络字体。
+完整动作名、器材、控件、云端反馈和日历使用系统中文字体。
+凝练、等宽数字用于倒计时与完成数量，不用于密集解释性文案。
+标题、动作名、当前组次与剩余时间须有明确层级，不能让装饰占据计时的视觉重心。
 
-## Colors
+## 三种模式
 
-The palette combines cool therapy-room surfaces with one unmistakable safety signal.
-Deep pool tones carry running state and high-contrast information.
-Foam and tile tones keep the idle page bright under ordinary indoor light.
-Orange marks Start and the current repetition, while danger red is reserved for stopping and errors.
+### 训练前
 
-**The Safety Signal Rule.**
-Use orange only for the primary Start action and the active training marker so it never loses urgency.
+页面上方显示紧凑标题和可点击的同步状态，后接两套计划标签。
+首页的主要任务是开始所选计划，或回到本设备尚未结束的训练。
+有未完成进度时，恢复卡片替代开始按钮，呈现完整动作、剩余时间或就位状态，以及「查看并继续训练」。
+切计划浏览不等于放弃，当前会话先暂停并保留，再载入另一计划。
+「结束这次训练」保持次要，必须进入结束确认。
 
-## Typography
+没有待恢复进度时，橙色开始块显示楷体操作文字和小型波形图形。
+初始准备说明保持一行简短辅助文字，不增加训练剂量或效果承诺。
+声音开关和试听入口位于开始区之后，首次使用不必先进入训练才能测试声音。
+动作详情默认展开，列出每项完整名称、器材和既定剂量；可折叠，但不截断唯一的动作身份。
 
-Kai-style Chinese display lettering gives instructions a human coaching voice without importing a network font.
-The system body stack handles supporting copy and controls.
-Condensed tabular numerals are reserved for the countdown because they are measurement, not decoration.
+### 专注训练
 
-**The Glance Rule.**
-Phase, group, repetition, and remaining time must be understandable in one glance without reading explanatory copy.
+训练模式隐藏首页大标题、计划选择器、完整动作列表、日历与主导航。
+顶部只保留返回入口、所选计划与五项中的位置，以及同步状态入口。
+五个不可点击的编号点位于动作身份上方，当前动作名和器材完整显示，不用短进度文案替代。
+主内容依次为动作身份、计分板、组次进度和必要的异常提示。
 
-## Layout
+计分板在宽屏分为阶段区和数字区，在 700px 以下纵向排列。
+窄屏阶段区并排显示阶段名与紧凑组次，数字区始终保持最大字号。
+首次准备使用同一计分板，准备完成前不把第一次动作标为活动状态。
+工作、短休、组休、节间休息、暂停与就位状态有清楚文字，不靠更换背景色迫使用户重新识别页面。
 
-The page is a centered full-height lane between two rope markers.
-Idle mode places one compact full-width Start block directly below the five-stage progress.
-A two-tab plan selector sits above the progress; switching plans changes the routine and calendar together without changing the page's visual identity.
-There is no promise headline, formula subtitle, introductory paragraph, or placeholder for removed copy.
-Running mode splits the scoreboard into a dark phase bay and a dominant clock field, then linearizes those zones below 700px.
-The same scoreboard shows the initial preparation countdown before any repetition becomes active.
-On the new plan's fifth stage it shows 「8–10 次 / 组 · 不计时」 instead of a countdown, with an explicit 「完成」 control for each group.
-Five numbered stage points stay above it, followed by the unabridged exercise identity and equipment.
-The shared action-details disclosure holds dosage without repeating it above the active clock.
-The next-stage ready screen keeps a stationary upcoming duration and puts the explicit continue action inside the clock field, not below the fold after the progress lanes.
-The outer width is capped at 920px with responsive gutters and safe-area padding.
-A quiet month calendar follows the training surface rather than competing with its countdown.
+项间就位显示下一项的完整身份和静止时长，不让静止数字看起来已经倒计时。
+下肢计划第五项显示「8-10 次 / 组 · 不计时」，每组的完成按钮明确写出组号。
+第一组完成后进入「下一组就位」，由用户明确开始第二组，不添加固定休息或自动完成。
 
-## Elevation & Depth
+### 记录
 
-Most structure comes from solid color fields and one-pixel dividers.
-The Start block and scoreboard alone use a soft downward ambient shadow to feel like physical equipment resting above tile.
+记录使用独立视图，不在训练过程中占据屏幕或提供容易误触的编辑入口。
+计划标签同时决定日历、当周次数与记录详情，不能混用另一套计划的统计。
+文字明确说明共享次数合并计算，不暗示这是个人成绩。
+周频率只在原计划显示原有的每周 3-4 次，新计划不新增目标。
 
-## Shapes
+月历为周一优先的七列布局，保留上月、下月与月份标题。
+完成日期使用水蓝实心底与白字，今天使用深色描边和「今天」文字；今天完成时两种含义同时保留。
+选中日期另有可见标记，不能与今天或完成状态混为一谈。
+未来日期不可编辑，同一天多条有效记录只点亮一个日期。
 
-Primary equipment panels use generous 26px corners.
-Secondary controls and progress cells use complete pill geometry.
-Circular forms appear only as partial lane-rope and equipment markings, never as progress rings.
+点击日期就在下方呈现该日每条记录，不把焦点自动跳到日期输入控件，也不跳到其他页面。
+每条记录区分实际训练、手动补记或导入来源，不给补记伪造完成时刻。
+撤销以单条记录为目标，按钮先变为「确认撤销」，同时说明其他记录保留。
+「补记一次完成」先说明日期与当前计划，再明确确认，避免一个点击生成记录。
+空日期仅提供简短状态与补记入口，不增加装饰性占位卡片。
 
-## Components
+## 主操作与恢复
 
-### Start Button
+训练模式使用固定在视口底部的操作区，包含底部安全区与一条浅分隔线。
+页面内容预留操作区的空间，最末内容必须能够滚动到按钮上方。
+暂停、继续、下一项开始、手动组完成和完成后的查看记录，始终使用同一主操作位置。
+主按钮宽度填满操作区，宽屏至少 56px 高，窄屏至少 53px 高。
+控件切换后把焦点移交给当前可见主按钮，不能让焦点留在隐藏按钮上。
 
-The Start button is a compact full-width orange equipment block with Kai display text, a waveform, and a large touch target.
-Hover lifts it by 3px and active press moves it down by 1px.
-The sound toggle and test/retry action follow the training controls and remain accessible before starting.
+次级操作使用紧凑文字按钮，提供声音、试听、允许时的跳过和结束。
+手动组进行中另有暂停入口。
+「跳过准备」仅在首次准备运行期间出现。
+两套计划的组间休息可以「跳过休息」，下肢计划的节间休息不可跳过。
+工作和短休没有跳段入口。
 
-### Scoreboard
+下一项按钮严格使用「准备好了，开始下一项」。
+下肢第五项第一组完成后，按钮使用「准备好了，开始第 2 组」。
+就位和暂停都不能因等待超时而自动开始。
 
-The scoreboard pairs a nearly black blue phase bay with a deep blue clock field.
-The current interval owns the largest type, while the next transition remains secondary and explicit.
+结束操作先暂停，在同一底部区域展开确认，不把危险动作放到默认焦点。
+「保留进度」是优先选项，「确认结束本次」使用危险红。
+完成历史和待同步的完成意图不能被重置操作一并删除，失败状态须保留可用的重试操作。
 
-### Progress Lanes
+## 完成态与云端反馈
 
-Five numbered stage points express the top-level sequence; they are a non-interactive ordered list, never skip buttons.
-Completed points are pool teal with an explicit completed label, the current point is orange, and pending points remain foam white.
-Short progress labels supplement full accessible names and the untruncated current-stage heading.
-Within stages 1-4, two labeled rows of six split-time cells map that stage's groups exactly.
-The new plan's fifth stage instead has two labeled rows of one manual-completion cell each.
-Within stage 5, eight cells map four alternating work/stretch rounds.
-Completed cells turn pool teal, the active action cell turns orange and grows vertically, and pending cells remain foam white.
-A repetition becomes complete as soon as its work interval ends, including during the following short rest and during group rest.
+完成后使用独立的「训练完成」面板，呈现 5 / 5、计划和完成日期，不继续展示最后动作的 0 秒计分板。
+完成状态与保存状态分开陈述。
+云端确认前显示等待同步；本地写入失败显示尚未保存，不能用模糊的「完成」掩盖记录失败。
+云端确认后才显示已同步，本地隔离预览明确说明不会写入正式云端。
+「查看记录」是完成页的主操作，「返回训练」为次要操作。
 
-### Timing Controls
+训练前和记录页的同步入口使用小型状态指示，不扩展为占据主屏的控制台。
+打开后再显示共享口令、同步重试、锁定入口、云端恢复、旧数据迁移和冲突处理。
+训练中进入数据管理前先暂停，返回后不得自动开始。
 
-During the initial 30-second preparation window only, a teal pill labeled 「跳过准备」 sits beside Pause and End.
-Only the original plan's 60-second group rest shows 「跳过休息」; the new plan's 60-second stage rest does not.
-Neither control can skip work or short repetition rests.
-Pause has a distinct stopped state and preserves the remaining interval time.
-Ready and paused states place their orange Continue action inside the dark scoreboard with a foam focus outline.
-The next-stage label is exactly 「准备好了，开始下一项」 and never implies an automatic start.
+共享口令只说明访问要求，不出现个人账号选择或用户画像。
+云端恢复逐项显示计划与动作进度，先选择再确认取得写入权，不能自动替用户接管。
+本设备存在未完成会话时，提示先明确处理，不能覆盖本地恢复入口。
+冲突显示可采取的选择和影响，另存本地完成需要说明会增加一次共享次数。
 
-### End and Restart
+迁移使用逐步展开的检查、备份、确认导入顺序，显示数量和异常，不默认公开原始健康记录。
+备份下载发起不等于文件已被用户核对，反馈应说明需要核对下载结果。
+不能把请求排队、部分导入或存在冲突描述为全部成功。
 
-「结束 / 重新开始」 is a white pill in danger red.
-It pauses first and opens an inline confirmation, explicitly preserving saved history.
-The confirmation has clear commit/cancel choices and deliberate keyboard focus.
+## 布局、尺寸与形状
 
-### Calendar and Warnings
+页面最大宽度为 800px，训练模式收紧到 760px，使用响应式侧边距与安全区。
+深蓝计分板和开始块使用轻柔的向下阴影，其他结构主要靠颜色和细分隔线。
+主面板保留 26px 圆角，窄屏计分板为 22px；普通控件为 15px 左右，日历单元为 9px。
+只在编号点和克制的泳道装饰中使用圆形，不新增圆形计时环。
 
-Each plan has its own simple seven-column calendar with Monday first, month navigation and no decorative achievement cards.
-Completed dates use pool teal with white text; today has a dark outline and the word 「今天」, including on a completed date.
-Multiple full sessions on a day still produce one marked date, while the weekly summary counts sessions against 3-4 per week.
-Calendar dates are compact editable local check-ins with a separate date field and explicit mark/cancel actions.
-The empty calendar has no explanatory paragraph or replacement card.
-Storage, background playback and wake-lock warnings use short actionable statuses without claiming physical audibility.
-The footer states that continuous stage audio can survive ordinary tab hiding where the browser permits it, while lock-screen and iOS background behavior remains an OS/browser limitation.
-Playback status sits next to a real test/retry action rather than a separate warning essay.
-Local-only storage and the browser-dependent background/lock-screen limitation remain as two short footer lines.
+当前训练数字宽屏约 6.2rem，窄屏约 5.6rem；静止就位数字降低到约 3.6-3.8rem。
+动作标题窄屏约 1.16rem，保持可读且允许长中文自然换行。
+小字仅用于冗余进度、日期和辅助状态，不能成为动作、器材或关键操作的唯一表述。
+嵌套网格使用 `minmax(0,1fr)`，可收缩子项有 `min-width:0`，长名称、状态和错误允许换行。
 
-### Operate Extension Tokens
+## 无障碍与动效
 
-This surface is Operate mode: retain the incumbent aquatic pace-board identity, with system text for detailed exercise names, controls and the calendar.
-Supporting text uses a compact 0.7-0.95rem scale; the smallest sizes are only redundant status/date labels, not the sole accessible exercise identity.
-Body and detailed status use 1-1.2rem, section and exercise headings use 1.35-1.4rem, phase labels use 2.4-2.7rem, and running measurement uses 5.5-6rem.
-A ready state's stationary upcoming duration is 3rem, distinct from the active countdown.
-Retain the incumbent secondary shades #659da0 and #6e9da0 for dividers, #d9eeee for dark-surface text, #213b43 for Start supporting text, #d7f3f1 for teal hover and #fff3f0 for danger hover.
-The orange action hover is #fa8454.
-The existing generated `.impeccable/design.json` is not hand-edited; this document and shipped CSS remain the visual authority.
+所有主要操作支持键盘，并有可见焦点。
+计划标签采用手动激活：方向键、Home 和 End 移动焦点，Enter 或空格才选择计划。
+日历选中后保持对应日期的焦点，不强制打开原生日期控件。
+状态和错误以文字说明，数字、常规组次和秒数不放进持续播报区域，以免抢占训练语音。
+告警、明确记录操作与云端反馈可以使用状态播报。
 
-## Do's and Don'ts
+默认界面不依赖入场动画解释状态，按钮只保留轻微的悬停反馈。
+遵守 `prefers-reduced-motion`，禁用动画、过渡和顺滑滚动。
+不引入网络字体、图像、图标库或特效依赖。
 
-### Do:
+## 验收与维护
 
-- **Do** preserve orange for Start and the active repetition.
-- **Do** keep five non-interactive stage points visible, with the current stage's two-by-six lane or eight-action lane.
-- **Do** use solid fields and high contrast so the optional screen remains glanceable.
-- **Do** preserve the one-time scoreboard reveal and reduced-motion fallback.
-- **Do** keep controls at least 44px high, with 52px timing actions and no horizontal overflow at 320px.
+重点检查 320px、375px、390px 和宽屏布局，没有水平溢出，五个编号点同时可见。
+检查固定底部动作不遮住可滚动内容，安全区、长动作名、器材和错误状态都能完整阅读。
+检查真实运行、准备、暂停、就位、手动组、完成、记录和云端异常状态，不能只验收首页。
+手机扬声器、系统音量、蓝牙和后台播放能力需要目标设备验证，视觉设计不替代听音证据。
 
-### Don't:
-
-- **Don't** replace the scoreboard with a circular progress ring.
-- **Don't** add decorative cards, coaching claims, achievements, or gamification.
-- **Don't** add network-dependent fonts, images, icons, or effects.
-- **Don't** let visual animation compete with the spoken cue and beep sequence.
+本文件与 `src/styles.css` 是视觉规则的权威来源。
+生成的 `index.html` 和 `.impeccable/design.json` 不手工修改。
+训练剂量、共享记录语义与安全边界以 `PRODUCT.md` 为准，构建与发布以 `README.md` 为准。

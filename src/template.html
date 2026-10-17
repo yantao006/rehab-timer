@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#eaf4f3">
+  <title>康复训练计时器</title>
+  <style>/* BUILD:STYLES */</style>
+</head>
+<body>
+  <div class="app-shell" id="appShell" data-view="home">
+    <header class="site-header" id="siteHeader">
+      <div><p class="eyebrow">按自己的节奏，完成每一次</p><h1>康复训练计时器</h1></div>
+      <button class="sync-indicator" id="openCloudButton" type="button" aria-controls="cloudPanel" aria-expanded="false"><span class="sync-dot" aria-hidden="true"></span><span id="syncSummary">正在读取记录</span></button>
+    </header>
+    <main>
+      <p class="debug-badge" id="debugBadge" hidden></p>
+      <section class="cloud-panel" id="cloudPanel" aria-labelledby="cloudTitle" hidden>
+        <div class="section-top"><h2 id="cloudTitle">共享记录与同步</h2><button class="text-button" id="closeCloudButton" type="button">收起</button></div>
+        <p id="cloudStatus" class="cloud-status" role="status"></p>
+        <form id="unlockForm" class="unlock-form" hidden>
+          <label for="sharedPassword">共享口令</label><div class="input-row"><input id="sharedPassword" type="password" autocomplete="current-password" required placeholder="输入共享口令"><button class="control primary" id="unlockButton" type="submit">解锁</button></div>
+          <p class="muted-note">共用一份训练记录，不区分个人。</p>
+        </form>
+        <div class="cloud-actions"><button class="control" id="syncRetryButton" type="button">重试同步</button><button class="text-button" id="logoutButton" type="button" hidden>锁定共享记录</button></div>
+        <p class="notice" id="cloudActionMessage" role="status" hidden></p>
+        <section class="conflict-panel" id="conflictPanel" aria-labelledby="conflictTitle" hidden><h3 id="conflictTitle">有记录需要处理</h3><p class="muted-note">云端版本已变化，本设备的相关同步已停止。请明确选择，不会自动覆盖。</p><div id="conflictList"></div></section>
+        <details id="remoteDetails" class="management-details"><summary>从云端恢复暂停的训练</summary><p class="muted-note">只在你选择后恢复。需要联网取得这次训练的写入权；另一设备的旧进度不会自动覆盖它。</p><button class="control" id="refreshSessionsButton" type="button">刷新可恢复训练</button><div id="remoteSessions" class="remote-list"></div></details>
+        <details id="migrationDetails" class="management-details"><summary>导入本浏览器的旧记录</summary><p class="muted-note">先检查并下载备份，再确认导入。原有数据保留，重试不会重复添加。</p><button class="control" id="scanLegacyButton" type="button">检查旧记录</button><div id="migrationPreview" hidden><p id="migrationSummary"></p><ul id="migrationIssues"></ul><div class="cloud-actions"><button class="control" id="backupLegacyButton" type="button">下载备份</button><button class="control primary" id="importLegacyButton" type="button">确认导入</button></div><p class="muted-note" id="migrationHint">请先下载备份，核对后再导入。</p></div></details>
+      </section>
+      <div class="plan-tabs" id="planSelector" role="tablist" aria-label="训练计划">
+        <button class="plan-tab" id="originalTab" type="button" role="tab" aria-selected="true" aria-controls="planContent" tabindex="0">原计划</button>
+        <button class="plan-tab" id="jointTab" type="button" role="tab" aria-selected="false" aria-controls="planContent" tabindex="-1">下肢关节居家训练</button>
+      </div>
+      <div id="planContent" role="tabpanel" aria-labelledby="originalTab">
+        <section id="homeView" aria-labelledby="homeTitle">
+          <div class="home-heading"><h2 id="homeTitle">准备开始今天的训练</h2><p id="homePlanMeta">5 项动作 · 语音引导</p></div>
+          <section class="resume-panel" id="resumePanel" aria-labelledby="resumeTitle" hidden><p class="eyebrow">本设备有一段训练可以继续</p><h3 id="resumeTitle"></h3><p id="resumeMeta"></p><button class="control primary" id="resumeButton" type="button">查看并继续训练</button><button class="text-button danger" id="homeResetButton" type="button">结束这次训练</button></section>
+          <section id="idlePanel" aria-label="开始训练"><button class="start-button" id="startButton" type="button"><span class="start-inner"><svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true"><path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/></svg><span class="start-label">开始训练</span></span><span class="start-subtitle">30 秒准备，然后按语音开始</span></button></section>
+          <p class="notice" id="startMessage" role="status" hidden></p>
+          <div class="home-sound"><button class="control" id="homeSoundButton" type="button" aria-pressed="true">声音：开</button><button class="text-button" id="homeTestSoundButton" type="button">试听声音</button></div>
+          <p class="audio-status" id="homeAudioStatus" role="status" hidden></p>
+          <details class="routine-details" open><summary>动作详情</summary><ol id="routineList"></ol></details>
+        </section>
+        <section id="trainingView" aria-label="专注训练" hidden>
+          <div class="training-top"><button class="text-button" id="backTrainingButton" type="button">返回训练</button><p id="trainingPlanLabel"></p><button class="text-button training-sync" id="trainingSyncButton" type="button">同步状态</button></div>
+          <ol class="stage-progress" id="stageProgress" aria-label="五项训练进度，仅展示，不可跳项"></ol>
+          <section class="running-panel" id="runningPanel" aria-label="当前训练" hidden>
+            <div class="exercise-identity"><h2 class="exercise-heading" id="exerciseName"></h2><p class="exercise-meta" id="exerciseMeta"></p></div>
+            <div class="scoreboard" id="scoreboard"><div class="interval-state"><p class="phase-name" id="phaseName"></p><p class="position-copy" id="positionCopy"></p></div><div class="clock-field"><p class="countdown" id="countdown"></p><p class="countdown-unit" id="countdownUnit"></p><p class="next-cue" id="nextCue"></p></div></div>
+            <div class="lane-progress" id="laneProgress" aria-label="当前项组次进度"></div>
+          </section>
+          <section class="finished-panel" id="finishedPanel" aria-labelledby="finishedTitle" hidden><p class="finish-count">5 <span>/ 5</span></p><h2 id="finishedTitle">训练完成</h2><p id="finishedMeta"></p><div class="completion-status"><strong id="completionStatus"></strong><p id="completionHint"></p></div><button class="control" id="retrySaveButton" type="button" hidden>重试保存记录</button></section>
+          <p class="notice" id="runtimeMessage" role="status" hidden></p>
+          <p class="notice" id="compatibilityMessage" role="status" hidden></p>
+        </section>
+        <section class="calendar-section" id="recordsView" aria-labelledby="calendarTitle" hidden>
+          <div class="calendar-top"><h2 id="calendarTitle">训练记录</h2><p id="weeklySummary"></p></div><p class="muted-note">共享记录合并统计，不区分个人。</p>
+          <div class="calendar-nav"><button class="control" id="prevMonth" type="button" aria-label="上一个月">上月</button><h3 class="month-title" id="monthTitle" aria-live="polite"></h3><button class="control" id="nextMonth" type="button" aria-label="下一个月">下月</button></div>
+          <div class="calendar-grid" id="calendarGrid" role="group" aria-label="本月日期"></div>
+          <section class="date-details" id="dateDetails" aria-labelledby="dateDetailsTitle"><div class="date-details-top"><h3 id="dateDetailsTitle"></h3><label class="date-picker" for="historyDate">选择日期<input id="historyDate" type="date" required aria-label="选择记录日期"></label></div><div id="dateRecords" class="date-records"></div><button class="control" id="markDate" type="button">补记一次完成</button><p class="muted-note" id="historyStatus" role="status"></p></section>
+        </section>
+      </div>
+      <p class="notice" id="storageMessage" role="status" hidden></p>
+      <audio id="cueAudio" preload="auto" playsinline src="audio/prepare.wav" hidden></audio>
+    </main>
+    <nav class="main-nav" id="mainNav" aria-label="主导航"><button type="button" id="homeNav" aria-current="page">训练</button><button type="button" id="recordsNav">记录</button></nav>
+    <footer class="page-footer" id="pageFooter"><p class="background-reminder">首次请试听。项间需手动继续；锁屏播放取决于系统。</p><p class="local-note" id="persistenceNote">云端共享记录，本设备保留恢复进度与待同步记录。</p></footer>
+  </div>
+  <div class="action-dock" id="actionDock" hidden><div class="action-dock-inner">
+    <div class="reset-confirm" id="resetConfirm" hidden role="group" aria-labelledby="resetQuestion"><p id="resetQuestion">结束本次？未完成不打卡，已有记录保留。</p><div class="confirm-actions"><button class="control primary" id="cancelResetButton" type="button">保留进度</button><button class="control danger" id="confirmResetButton" type="button">确认结束本次</button></div></div>
+    <div id="normalActions"><div class="primary-actions"><button class="control primary" id="pauseButton" type="button" hidden>暂停</button><button class="control primary" id="continueButton" type="button" hidden>继续训练</button><button class="control primary" id="completeButton" type="button" hidden>完成第 1 组</button><button class="control primary" id="finishedRecordsButton" type="button" hidden>查看记录</button></div>
+      <div class="secondary-actions"><button class="text-button" id="soundButton" type="button" aria-pressed="true">声音：开</button><button class="text-button" id="testSoundButton" type="button">试听声音</button><button class="text-button" id="manualPauseButton" type="button" hidden>暂停</button><button class="text-button" id="skipPrepButton" type="button" hidden>跳过准备</button><button class="text-button" id="skipRestButton" type="button" hidden>跳过休息</button><button class="text-button danger" id="resetButton" type="button">结束本次</button><button class="text-button" id="finishedHomeButton" type="button" hidden>返回训练</button></div>
+    </div><p class="audio-status" id="audioStatusText" role="status" hidden></p>
+  </div></div>
+  <script id="rehab-core">/* BUILD:CORE */</script>
+  <script id="rehab-repository">/* BUILD:REPOSITORY */</script>
+  <script id="rehab-app">/* BUILD:APP */</script>
+</body>
+</html>

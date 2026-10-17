@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rehab-timer",
+  "compatibility_date": "2026-08-31",
+  "pages_build_output_dir": "./.publish",
+  "vars": { "APP_ENV": "production" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rehab-timer-production",
+      "database_id": "8141579e-ae3c-4fd2-a7e4-d5deaddd7b86",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "env": {
+    "preview": {
+      "vars": { "APP_ENV": "preview" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "rehab-timer-preview",
+          "database_id": "af8555e4-a8a6-4d36-a4fb-64da4bc3909d",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}

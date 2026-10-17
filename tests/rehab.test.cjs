@@ -125,7 +125,12 @@ test('下肢前四节末次直接60秒组休或节休，原计划组休不变，
   }
   assert.deepEqual(plain(jointPlan.filter(p => p.stage === 4).map(p => [p.group,p.kind,p.seconds])), [[1,'manual',0],[2,'manual',0]]);
   assert.equal(e.state,'manual');
-  assert.equal(e.completeManual(FINISH),'manual'); assert.equal(e.completion,null);
+  assert.equal(e.completeManual(FINISH),'ready'); assert.equal(e.completion,null);
+  assert.equal(e.completeManual(FINISH),false); // A double tap cannot finish the next group.
+  const restored = new Engine(1000, JOINT_PROGRAM);
+  assert.equal(restored.restore(e.snapshot()),true);
+  assert.equal(restored.state,'ready');
+  assert.equal(e.continue(),true); e.state='manual';
   assert.equal(e.completeManual(FINISH),'finished'); assert.equal(e.completion.date,localDate(FINISH));
 });
 test('下肢组休可跳过到同节第二组，节间休息不能跳过', () => {
@@ -436,6 +441,13 @@ test('红框内容连同容器删除，详情仍可查看，声音恢复操作�
 });
 
 const appFixture = require('./app-fixture.cjs');
+test('无效测试参数也隔离，页面不把本地保存标成云端同步', async () => {
+  for(const search of ['?test=10','?test=0','?debugMs=1000','?debugMs=bad']) {
+    const f=appFixture({search,protocol:'https:'});await f.click('startButton');
+    assert.equal(f.context.__rehabTimer.config.mode,'local');
+    assert.equal(f.elements.get('persistenceNote').textContent,'本地隔离预览，不会写入正式云端记录。');
+  }
+});
 test('真实页面控制器：首次点击启动连续阶段音轨，隐藏页面不靠回调暂停', async () => {
   const f=appFixture(); await f.click('startButton');
   assert.deepEqual(f.requests[0],{key:'stage-1',at:0,gesture:true});
@@ -482,6 +494,53 @@ test('连续音轨暂停后刷新仍需手动继续，重置不新增历史', as
   await restored.click('resetButton'); await restored.click('confirmResetButton');
   assert.equal(restored.state().runState,'idle'); assert.equal(restored.state().historyCount,0);
   assert.equal(storage.get('rehab-timer:v1:sentinel'),'synthetic-do-not-touch');
+});
+
+test('真实页面控制器：切换计划保留暂停进度，方向键只移动焦点，刷新记住选择', async () => {
+  const storage=new Map(),f=appFixture({storage});
+  await f.click('startButton');await f.advance(2000);await f.click('backTrainingButton');
+  const snapshot=f.state();assert.equal(snapshot.runState,'paused');
+  await f.key('originalTab','ArrowRight');
+  assert.equal(f.state().program,snapshot.program);
+  assert.equal(f.context.document.activeElement,f.elements.get('jointTab'));
+  await f.click('jointTab');assert.equal(f.state().runState,'idle');
+  const reopened=appFixture({storage});assert.equal(reopened.context.__rehabTimer.config.program,context.RehabCore.JOINT_PROGRAM);
+  await f.click('originalTab');
+  assert.equal(f.state().id,snapshot.id);assert.equal(f.state().remaining,snapshot.remaining);
+  assert.equal(f.state().runState,'paused');
+  await f.click('resumeButton');assert.equal(f.state().runState,'paused');
+  await f.click('continueButton');assert.equal(f.requests.at(-1).gesture,true);
+});
+
+test('真实页面控制器：结束后重开清除旧音轨位置，新会话完整执行准备', async () => {
+  const f=appFixture();await f.click('startButton');await f.advance(70000);
+  const previous=f.state();assert.ok(previous.index>0);
+  await f.click('resetButton');await f.click('confirmResetButton');await f.click('startButton');
+  await f.advance(1000);
+  assert.notEqual(f.state().id,previous.id);assert.equal(f.state().index,0);
+  assert.equal(f.state().runState,'running');assert.ok(f.state().remaining>29000);
+  assert.equal(f.events().filter(event=>event.type==='track-start').at(-1).position,0);
+});
+
+test('真实页面控制器：下肢完整音轨四次手动边界，第五项双击不能完成第二组，刷新保留就位', async () => {
+  const storage=new Map(),f=appFixture({storage});await f.click('jointTab');await f.click('startButton');
+  assert.equal(f.requests[0].key,'stage-joint-1');assert.equal(f.requests[0].gesture,true);
+  for(let stage=0;stage<4;stage++) {
+    const track=context.RehabCore.stageTrack(stage,context.RehabCore.JOINT_PROGRAM);
+    await f.advance((track.duration+2)*1000);
+    assert.equal(f.state().runState,'ready');
+    const index=f.state().index;await f.advance(60000);assert.equal(f.state().index,index);
+    await f.click('continueButton');
+  }
+  assert.equal(f.state().runState,'manual');assert.equal(f.state().index,97);
+  await f.click('completeButton');await f.click('completeButton');
+  assert.equal(f.state().runState,'ready');assert.equal(f.state().historyCount,0);
+  const restored=appFixture({storage});assert.equal(restored.state().runState,'ready');
+  assert.equal(restored.state().index,98);assert.equal(restored.requests.length,0);
+  await restored.click('resumeButton');await restored.click('continueButton');await restored.advance(1000);
+  assert.equal(restored.state().runState,'manual');await restored.click('completeButton');
+  assert.equal(restored.state().runState,'finished');assert.equal(restored.state().historyCount,1);
+  await restored.click('completeButton');assert.equal(restored.state().historyCount,1);
 });
 
 test('时区改变与夏令时附近日期不由UTC切片计算', () => {
