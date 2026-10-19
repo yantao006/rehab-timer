@@ -1,5 +1,5 @@
 import { ApiError, fail } from '../_lib/validation.js';
-import { authenticated, configuration, login, logout, origin } from '../_lib/auth.js';
+import { configuration, logout, origin } from '../_lib/auth.js';
 import { applyOperation, stateResponse } from '../_lib/storage.js';
 const MAX_BODY = 1024 * 1024;
 function json(value, status = 200, headers = {}) {
@@ -29,17 +29,12 @@ export async function onRequest(context) {
     // Use a primary-first D1 session when available, including read-after-write retries.
     const env = { ...context.env, DB: context.env.DB.withSession?.('first-primary') || context.env.DB };
     const path = new URL(request.url).pathname.replace(/\/$/, '');
-    if (path === '/api/login' && request.method === 'POST') {
-      const cookie = await login(request, env, await body(request));
-      return json({ ok: true, environment: env.APP_ENV }, 200, { 'Set-Cookie': cookie });
-    }
-    if (path === '/api/logout' && request.method === 'POST') return json({ ok: true }, 200, { 'Set-Cookie': logout() });
-    await authenticated(request, env);
+    if ((path === '/api/login' || path === '/api/logout') && request.method === 'POST') return json({ ok: true, environment: env.APP_ENV }, 200, { 'Set-Cookie': logout() });
     if (path === '/api/state' && request.method === 'GET') return json(await stateResponse(env));
     if (path === '/api/operation' && request.method === 'POST') return json(await applyOperation(env, await body(request)));
     return json({ ok: false, error: { code: 'not_found', message: '接口不存在。' } }, 404);
   } catch (error) {
-    if (error instanceof ApiError) return json({ ok: false, error: { code: error.code, message: error.message }, ...error.extra }, error.status, error.status === 429 ? { 'Retry-After': '900' } : {});
+    if (error instanceof ApiError) return json({ ok: false, error: { code: error.code, message: error.message }, ...error.extra }, error.status);
     console.error('rehab-api-failure', error?.name || 'Error');
     return json({ ok: false, error: { code: 'storage_unavailable', message: '云端暂时无法保存，请保留本地进度后重试。' } }, 503);
   }

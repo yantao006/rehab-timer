@@ -19,7 +19,7 @@ class Storage {
 
 // A controllable transport double: the assertions exercise durable browser state and wire requests.
 class API {
-  constructor() { this.offline=false; this.locked=false; this.calls=[]; this.sessions=new Map(); this.records=new Map(); this.receipts=new Map(); this.dropType=null; this.failType=null; this.importCalls=0; this.hangType=null; this.hanging=[]; }
+  constructor() { this.offline=false; this.httpStatus=null; this.calls=[]; this.sessions=new Map(); this.records=new Map(); this.receipts=new Map(); this.dropType=null; this.failType=null; this.importCalls=0; this.hangType=null; this.hanging=[]; }
   response(status,data) { return {ok:status >= 200 && status < 300,status,json:async()=>plain(data)}; }
   fail(code,message='请求冲突。',session) { return this.response(409,{ok:false,error:{code,message},session}); }
   async fetch(path,options) {
@@ -27,9 +27,7 @@ class API {
     const body=options.body ? JSON.parse(options.body) : null;
     this.calls.push({path,options:plain(options),body});
     if (this.offline) throw Error('network unreachable');
-    if (path==='/api/login') { this.locked=body.passphrase!=='shared-test'; return this.response(this.locked?401:200,this.locked?{ok:false,error:{code:'locked',message:'口令错误。'}}:{ok:true}); }
-    if (path==='/api/logout') { this.locked=true; return this.response(200,{ok:true}); }
-    if (this.locked) return this.response(401,{ok:false,error:{code:'locked',message:'请输入共享口令。'}});
+    if (this.httpStatus) return this.response(this.httpStatus,{ok:false,error:{code:'service_unavailable',message:'共享服务暂不可用。'}});
     if (path==='/api/state') return this.response(200,{ok:true,records:[...this.records.values()],sessions:[...this.sessions.values()].map(({token,...session})=>session)});
     assert.equal(path,'/api/operation');
     const op=body, previous=this.receipts.get(op.operationId);
@@ -308,14 +306,23 @@ test('本地配额失败返回失败，不显示已同步、不删除完成outbo
   assert.equal(f.repo.isSynced(f.core.PROGRAM,'session-00000001'),false); assert.equal(f.api.records.size,0);
 });
 
-test('后端失败与口令错误不伪装成功，解锁后可以重试',async()=>{
-  const api=new API(); api.locked=true; const f=runtime({api}); await f.repo.init();
-  assert.equal(f.repo.status().state,'locked'); assert.equal(f.repo.canStart(),false);
-  await f.repo.login('wrong'); assert.equal(f.repo.status().state,'locked');
-  await f.repo.login('shared-test'); assert.equal(f.repo.canStart(),true);
+test('首次打开直接连接云端，无登录接口或Cookie依赖',async()=>{
+  const f=runtime(); assert.equal(f.repo.canStart(),false); await f.repo.init();
+  assert.equal(f.repo.status().state,'synced'); assert.equal(f.repo.canStart(),true);
+  assert.equal(f.repo.login,undefined); assert.equal(f.repo.logout,undefined);
+  assert.deepEqual(f.api.calls.map(call=>call.path),['/api/state']);
+  assert.ok(f.api.calls.every(call=>call.options.credentials==='omit'));
+});
+
+test('后端HTTP故障不伪装成功，恢复连接后可直接重试且保留完成队列',async()=>{
+  const api=new API(); api.httpStatus=503; const f=runtime({api}); await f.repo.init();
+  assert.equal(f.repo.status().state,'error'); assert.equal(f.repo.canStart(),false);
+  assert.match(f.repo.status().message,/共享服务暂不可用/);
+  api.httpStatus=null; await f.repo.flush(); assert.equal(f.repo.canStart(),true);
   f.store.saveProgress(f.snapshot()); await f.repo.flush(); api.failType='complete'; finishLocally(f); await f.repo.flush();
   assert.equal(f.repo.status().state,'error'); assert.ok(f.repo.status().pending>0); assert.equal(f.api.records.size,0);
   api.failType=null; await f.repo.flush(); assert.equal(f.repo.status().state,'synced');
+  assert.equal(f.api.records.size,1); assert.ok(f.api.calls.every(call=>!call.path.includes('login')));
 });
 
 test('刷新加载的本地进度由真实引擎恢复为暂停，不消耗离线时间',async()=>{

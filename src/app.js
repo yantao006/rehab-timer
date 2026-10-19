@@ -402,7 +402,7 @@
     const synced=savedCompletion&&repository.isSynced(program,engine.id);
     text("finishedMeta",`${program===PROGRAM?"原计划":"下肢关节居家训练"} · ${engine.completion?.date||localDate(new Date())}`);
     text("completionStatus",!savedCompletion?"记录尚未保存":mode==="local"?"记录已保存在隔离预览":synced?"记录已同步到云端":"训练已完成，记录等待同步");
-    text("completionHint",!savedCompletion?"请重试保存。结束或返回不会假装保存成功。":mode==="local"?"这是本地隔离记录，不会写入正式云端。":synced?"其他设备解锁后可查看这次完成。":"已保留在本设备。联网并解锁后会自动重试，请不要清除浏览器数据。");
+    text("completionHint",!savedCompletion?"请重试保存。结束或返回不会假装保存成功。":mode==="local"?"这是本地隔离记录，不会写入正式云端。":synced?"其他设备打开后可查看这次完成。":"已保留在本设备。联网后会自动重试，请不要清除浏览器数据。");
     $("retrySaveButton").hidden=savedCompletion&&synced;
     text("retrySaveButton",savedCompletion?"重试同步":"重试保存记录");
   }
@@ -572,11 +572,9 @@
     $("cloudTitle").scrollIntoView?.({block:"start",behavior:"auto"});
   }
   function renderCloud(force=false){
-    const status=repository.status(),labels={loading:"读取云端中",locked:"共享记录待解锁",synced:mode==="local"?"隔离预览记录":"已同步",pending:"等待同步",offline:"离线，进度保留",error:"同步未完成",conflict:"有同步冲突"};
+    const status=repository.status(),labels={loading:"读取云端中",synced:mode==="local"?"隔离预览记录":"已同步",pending:"等待同步",offline:"离线，进度保留",error:"同步未完成",conflict:"有同步冲突"};
     text("syncSummary",labels[status.state]||"记录状态");$("openCloudButton").dataset.state=status.state;
     text("cloudStatus",mode==="local"?"当前为本地隔离预览，所有记录与正式云端分开，不会联网同步。":status.message||labels[status.state]||"正在检查同步状态。");
-    $("unlockForm").hidden=mode!=="cloud"||status.state!=="locked";
-    $("logoutButton").hidden=mode!=="cloud"||["locked","loading"].includes(status.state);
     $("syncRetryButton").hidden=mode==="local";
     $("syncRetryButton").disabled=cloudBusy||status.state==="loading";
     $("remoteDetails").hidden=mode!=="cloud";$("migrationDetails").hidden=mode!=="cloud";
@@ -595,7 +593,7 @@
     }
     const remote=$("remoteSessions");remote.replaceChildren();
     const resumable=sessions.filter(session=>!["finished","completed","abandoned"].includes(session.status)&&session.snapshot&&programs[session.program]);
-    if(!resumable.length){const empty=document.createElement("p");empty.className="muted-note";empty.textContent=status.state==="locked"?"解锁后可以查看云端暂停进度。":"没有其他可恢复的训练。";remote.append(empty);}
+    if(!resumable.length){const empty=document.createElement("p");empty.className="muted-note";empty.textContent="没有其他可恢复的训练。";remote.append(empty);}
     for(const session of resumable){
       const row=document.createElement("div");row.className="remote-row";const heading=document.createElement("h4"),detail=document.createElement("p"),button=document.createElement("button");
       const schedule=programs[session.program],item=planFor(session.program,session.snapshot.groupRestSeconds??60)[session.snapshot.index],own=repository.forProgram(session.program).loadProgress()?.id===session.id;
@@ -694,7 +692,7 @@
     syncPlan();render();log("group-rest-selected",{seconds:selected});
   });
   $("startButton").addEventListener("click",()=>{
-    if(!repository.canStart()){showMessage("startMessage",mode==="cloud"?"开始新的训练前，请先联网并解锁共享记录。已有暂停进度仍可继续。":"本地保存不可用，请检查浏览器存储后重试。");openCloud();return;}
+    if(!repository.canStart()){showMessage("startMessage",mode==="cloud"?"正在连接共享记录，请联网后重试。已有暂停进度仍可继续。":"本地保存不可用，请检查浏览器存储后重试。");openCloud();return;}
     if(engine.state==="finished"){
       if(!savedCompletion){showMessage("startMessage","上一条完成记录尚未保留，请先重试保存。");view="training";render();return;}
       engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;syncPlan();
@@ -756,8 +754,6 @@
   }
   $("openCloudButton").addEventListener("click",openCloud);$("trainingSyncButton").addEventListener("click",openCloud);
   $("closeCloudButton").addEventListener("click",()=>{$("cloudPanel").hidden=true;$("openCloudButton").setAttribute("aria-expanded","false");$("openCloudButton").focus();});
-  $("unlockForm").addEventListener("submit",event=>{event.preventDefault();const passphrase=$("sharedPassword").value;if(!passphrase)return;runCloudAction($("unlockButton"),async()=>{const result=await repository.login(passphrase);if(["locked","offline","error","loading"].includes(result.state))throw new Error(result.message||"共享记录尚未解锁，请重试。");$("sharedPassword").value="";history=store.history();renderCalendar();render();showMessage("cloudActionMessage","共享记录已解锁。");});});
-  $("logoutButton").addEventListener("click",()=>runCloudAction($("logoutButton"),()=>repository.logout()));
   $("syncRetryButton").addEventListener("click",()=>runCloudAction($("syncRetryButton"),async()=>{await repository.flush();await repository.refresh();}));
   $("refreshSessionsButton").addEventListener("click",()=>runCloudAction($("refreshSessionsButton"),()=>repository.refresh()));
   $("scanLegacyButton").addEventListener("click",()=>{

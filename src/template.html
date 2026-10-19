@@ -19,11 +19,8 @@
       <section class="cloud-panel" id="cloudPanel" aria-labelledby="cloudTitle" hidden>
         <div class="section-top"><h2 id="cloudTitle">共享记录与同步</h2><button class="text-button" id="closeCloudButton" type="button">收起</button></div>
         <p id="cloudStatus" class="cloud-status" role="status"></p>
-        <form id="unlockForm" class="unlock-form" hidden>
-          <label for="sharedPassword">共享口令</label><div class="input-row"><input id="sharedPassword" type="password" autocomplete="current-password" required placeholder="输入共享口令"><button class="control primary" id="unlockButton" type="submit">解锁</button></div>
-          <p class="muted-note">共用一份训练记录，不区分个人。</p>
-        </form>
-        <div class="cloud-actions"><button class="control" id="syncRetryButton" type="button">重试同步</button><button class="text-button" id="logoutButton" type="button" hidden>锁定共享记录</button></div>
+        <p class="muted-note">共用一份训练记录，打开即可使用。</p>
+        <div class="cloud-actions"><button class="control" id="syncRetryButton" type="button">重试同步</button></div>
         <p class="notice" id="cloudActionMessage" role="status" hidden></p>
         <section class="conflict-panel" id="conflictPanel" aria-labelledby="conflictTitle" hidden><h3 id="conflictTitle">有记录需要处理</h3><p class="muted-note">云端版本已变化，本设备的相关同步已停止。请明确选择，不会自动覆盖。</p><div id="conflictList"></div></section>
         <details id="remoteDetails" class="management-details"><summary>从云端恢复暂停的训练</summary><p class="muted-note">只在你选择后恢复。需要联网取得这次训练的写入权；另一设备的旧进度不会自动覆盖它。</p><button class="control" id="refreshSessionsButton" type="button">刷新可恢复训练</button><div id="remoteSessions" class="remote-list"></div></details>

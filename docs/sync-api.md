@@ -1,17 +1,17 @@
 # 同步 API 契约
 
-所有数据接口仅同源 HTTPS 调用，绑定 D1 名称为 `DB`，环境变量为 `APP_ENV`（`preview` 或 `production`）、`SHARED_PASSPHRASE` 和 `SESSION_SECRET`。
-缺少配置时返回 503，认证失败返回 401，来源不符返回 403，格式错误返回 400，版本或写入权冲突返回 409。
+所有数据接口仅同源 HTTPS 调用，绑定 D1 名称为 `DB`，环境变量为 `APP_ENV`（`preview` 或 `production`）和 `SESSION_SECRET`。
+读取与写入均不需要口令、Cookie 或身份认证，客户端请求明确不发送登录 Cookie。
+缺少配置时返回 503，来源不符返回 403，格式错误返回 400，版本或写入权冲突返回 409。
 错误统一为 `{ok:false,error:{code,message},session?}`，其中 `session` 是冲突发生时的服务器会话。
 所有 JSON 响应为 `Cache-Control: no-store`。
-口令至少 8 个字符，SESSION_SECRET 至少 32 个字符，并应使用密码学随机值且跨部署保持不变。
-更换共享口令会使已有登录 Cookie 失效，不必更换 SESSION_SECRET。
+SESSION_SECRET 至少 32 个字符，用于会话写入权令牌签名，并应使用密码学随机值且跨部署保持不变。
+SHARED_PASSPHRASE 不再使用。
 写入令牌只保存 SHA-256 摘要；接管令牌通过持久服务端密钥和操作信息重新派生，使丢失响应可以幂等重试。
 
-## 认证与读取
+## 开放访问与读取
 
-- `POST /api/login` 输入 `{passphrase}`，成功返回 `{ok:true,environment}` 并设置 `rehab_session` 安全 Cookie。
-- `POST /api/logout` 输入 `{}`，成功清除 Cookie。
+- `POST /api/login` 和 `POST /api/logout` 仅兼容旧客户端，直接返回成功并清理旧 Cookie，不验证口令、不签发登录凭证，也不改变数据访问权限。
 - `GET /api/state` 返回 `{ok:true,environment,records,sessions}`。
 - 会话为 `{id,program,status,snapshot,revision,writerEpoch,updatedAt}`，`status` 为 `active`、`completed`、`abandoned`。
 - 快照与训练核心一致：`{version:1,planRevision:2,program,unitMs:1000,groupRestSeconds,id,index,remaining,state,completion}`。
@@ -80,7 +80,7 @@ operation_log 保存操作摘要和原始成功响应，不能在正常清理中
 
 本地验证使用真实 SQLite 的外键、CHECK、唯一性和事务回滚，无本地服务器。
 `node --test tests/api.test.mjs tests/integration.test.mjs` 同时检查 API 行为、实际训练计划一致性和浏览器仓储到 API 的完整协议。
-部署后还需要在独立预览 D1 上检查 Pages Functions 绑定、Cookie 和远程事务，不能用本地测试代替线上验证。
+部署后还需要在独立预览 D1 上检查 Pages Functions 绑定、无 Cookie 读写和远程事务，不能用本地测试代替线上验证。
 
 ## 排程修订与旧快照兼容
 

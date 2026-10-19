@@ -11,7 +11,7 @@ const TOKEN = 'synthetic-writer-token-00000000000000001';
 const NOW = Date.parse('2026-10-17T03:00:00.000Z');
 const DBS = [];
 afterEach(() => { for (const db of DBS.splice(0)) db.close(); });
-function setup() { const DB = new SQLiteD1(); DBS.push(DB); return { DB, APP_ENV: 'preview', SHARED_PASSPHRASE: 'synthetic-private-passphrase', SESSION_SECRET: 'synthetic-session-secret-000000000000000000000000000000' }; }
+function setup() { const DB = new SQLiteD1(); DBS.push(DB); return { DB, APP_ENV: 'preview', SESSION_SECRET: 'synthetic-session-secret-000000000000000000000000000000' }; }
 function snap(id = 'synthetic-session-001', program = P, patch = {}) { return { version: 1, planRevision: 2, program, unitMs: 1000, id, index: 0, remaining: 30000, state: 'paused', completion: null, ...patch }; }
 function create(id = 'synthetic-session-001', program = P) { return { operationId: `create-${id}`, type: 'create', program, sessionId: id, snapshot: snap(id, program), writerToken: TOKEN }; }
 function update(type, patch = {}) { return { operationId: `synthetic-${type}-operation`, type, program: P, sessionId: 'synthetic-session-001', expectedRevision: 1, writerEpoch: 1, writerToken: TOKEN, ...patch }; }
@@ -24,7 +24,6 @@ async function call(env, path, method = 'GET', data, cookie, extra = {}) {
   const response = await onRequest({ request: new Request(`https://test.example/api/${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data) }), env });
   return { response, body: await response.json() };
 }
-async function access(env) { const { response } = await call(env, 'login', 'POST', { passphrase: env.SHARED_PASSPHRASE }); assert.equal(response.status, 200); return response.headers.get('set-cookie').split(';')[0]; }
 async function rejectCode(promise, code) { await assert.rejects(promise, error => error.code === code); }
 
 test('服务端四档组间休息逐段对应实际训练核心，其他休息时长和索引不变', () => {
@@ -79,25 +78,37 @@ test('旧会话和旧幂等响应缺省为60秒，接管后保留且不能隐式
   assert.equal(claimed.session.snapshot.groupRestSeconds, 60);
   await rejectCode(applyOperation(env, update('progress', { sessionId: input.sessionId, expectedRevision: 2, writerEpoch: 2, writerToken: claimed.writerToken, snapshot: { ...input.snapshot, groupRestSeconds: 150 } }), NOW), 'session_settings_changed');
 });
-test('缺配置默认拒绝，所有读取和写入都需要认证，登录Cookie安全且不返回口令', async () => {
+test('无需口令配置或Cookie即可读取，数据库及写入权签名配置仍须完整', async () => {
   const env = setup();
   assert.equal((await call({ ...env, SESSION_SECRET: '' }, 'state')).response.status, 503);
-  assert.equal((await call({ ...env, SHARED_PASSPHRASE: '' }, 'state')).response.status, 503);
-  assert.equal((await call(env, 'state')).response.status, 401);
-  assert.equal((await call(env, 'operation', 'POST', create())).response.status, 401);
-  assert.equal((await call(env, 'login', 'POST', { passphrase: 'invalid' })).response.status, 401);
-  const login = await call(env, 'login', 'POST', { passphrase: env.SHARED_PASSPHRASE });
-  assert.match(login.response.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Strict/);
-  assert.match(login.response.headers.get('set-cookie'), /Path=\/api/);
-  assert.deepEqual(login.body, { ok: true, environment: 'preview' });
-  const cookie = login.response.headers.get('set-cookie').split(';')[0];
-  assert.equal((await call(env, 'state', 'GET', undefined, cookie)).response.status, 200);
-  assert.equal((await call(env, 'state', 'GET', undefined, `${cookie}bad`)).response.status, 401);
-  assert.equal((await call({ ...env, SHARED_PASSPHRASE: 'changed-passphrase' }, 'state', 'GET', undefined, cookie)).response.status, 401);
-  const out = await call(env, 'logout', 'POST', {}, cookie); assert.match(out.response.headers.get('set-cookie'), /Max-Age=0/);
+  assert.equal((await call({ ...env, DB: undefined }, 'state')).response.status, 503);
+  assert.equal((await call({ ...env, APP_ENV: 'unknown' }, 'state')).response.status, 503);
+  for (const passphrase of [undefined, '', 'changed-passphrase']) {
+    const result = await call({ ...env, SHARED_PASSPHRASE: passphrase }, 'state');
+    assert.equal(result.response.status, 200); assert.deepEqual(result.body.sessions, []);
+    assert.equal(result.response.headers.get('set-cookie'), null);
+  }
+});
+test('无Cookie及损坏旧Cookie均可创建、保存、接管和完成训练，写入权冲突仍受保护', async () => {
+  for (const cookie of [undefined, 'rehab_session=broken', `rehab_session=v1.1.${'0'.repeat(32)}.${'0'.repeat(64)}`]) {
+    const env = setup();
+    const created = await call(env, 'operation', 'POST', create(), cookie);
+    assert.equal(created.response.status, 200); assert.equal(created.body.session.revision, 1);
+    const progress = await call(env, 'operation', 'POST', update('progress', { snapshot: snap(undefined, P, { remaining: 28000 }) }), cookie);
+    assert.equal(progress.response.status, 200); assert.equal(progress.body.session.revision, 2);
+    const claimed = await call(env, 'operation', 'POST', { operationId: 'claim-without-auth', type: 'claim', program: P, sessionId: 'synthetic-session-001', expectedRevision: 2 }, cookie);
+    assert.equal(claimed.response.status, 200); assert.equal(claimed.body.session.writerEpoch, 2); assert.equal(claimed.body.writerToken.length, 64);
+    const stale = await call(env, 'operation', 'POST', update('progress', { operationId: 'old-writer-without-auth', expectedRevision: 3, snapshot: snap() }), cookie);
+    assert.equal(stale.response.status, 409); assert.equal(stale.body.error.code, 'writer_conflict');
+    const finished = await call(env, 'operation', 'POST', complete(undefined, P, { expectedRevision: 3, writerEpoch: 2, writerToken: claimed.body.writerToken }), cookie);
+    assert.equal(finished.response.status, 200); assert.equal(finished.body.session.status, 'completed');
+    const state = await call(env, 'state', 'GET', undefined, cookie);
+    assert.equal(state.response.status, 200); assert.equal(state.body.records.length, 1); assert.equal(state.body.sessions[0].revision, 4);
+    assert.equal(state.response.headers.get('set-cookie'), null);
+  }
 });
 test('来源、内容类型、请求尺寸和错误JSON受到检查，不暴露数据库错误', async t => {
-  const env = setup(), cookie = await access(env);
+  const env = setup(), cookie = 'rehab_session=ignored-legacy-cookie';
   assert.equal((await call(env, 'operation', 'POST', create(), cookie, { Origin: 'https://evil.example' })).response.status, 403);
   assert.equal((await call(env, 'state', 'GET', undefined, cookie, { 'Sec-Fetch-Site': 'cross-site' })).response.status, 403);
   assert.equal((await call(env, 'operation', 'POST', create(), cookie, { 'Content-Type': 'text/plain' })).response.status, 415);
@@ -110,11 +121,17 @@ test('来源、内容类型、请求尺寸和错误JSON受到检查，不暴露�
   const unavailable = await call(env, 'state', 'GET', undefined, cookie); assert.equal(unavailable.response.status, 503); assert.equal(JSON.stringify(unavailable.body).includes('injected'), false);
   assert.deepEqual(logs, [['rehab-api-failure', 'Error']]);
 });
-test('登录失败限速原子计数，不把客户端伪造XFF当身份', async () => {
+test('旧登录和退出端点只清理Cookie，不检查口令、不限速且不影响后续直接读写', async () => {
   const env = setup();
-  for (let n = 0; n < 10; n++) assert.equal((await call(env, 'login', 'POST', { passphrase: 'wrong' }, undefined, { 'X-Forwarded-For': `pretend-${n}` })).response.status, 401);
-  const result = await call(env, 'login', 'POST', { passphrase: env.SHARED_PASSPHRASE });
-  assert.equal(result.response.status, 429); assert.equal(result.response.headers.get('retry-after'), '900');
+  for (let n = 0; n < 15; n++) {
+    const result = await call(env, n % 2 ? 'logout' : 'login', 'POST', n % 3 ? { passphrase: 'wrong' } : undefined, 'rehab_session=broken');
+    assert.equal(result.response.status, 200); assert.deepEqual(result.body, { ok: true, environment: 'preview' });
+    assert.equal(result.response.headers.get('set-cookie'), 'rehab_session=; Path=/api; Max-Age=0; HttpOnly; Secure; SameSite=Strict');
+    assert.equal(result.response.headers.get('retry-after'), null);
+  }
+  assert.equal((await env.DB.prepare('SELECT count(*) AS n FROM login_limits').first()).n, 0);
+  assert.equal((await call(env, 'operation', 'POST', create())).response.status, 200);
+  assert.equal((await call(env, 'state')).body.sessions.length, 1);
 });
 test('两人独立训练和两套计划同ID互不覆盖，状态响应不含写入令牌hash', async () => {
   const env = setup();

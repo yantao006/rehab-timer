@@ -25,7 +25,7 @@ globalThis.RehabPersistence = (() => {
     const clearTimer = options.clearTimeout || globalThis.clearTimeout?.bind(globalThis);
     const requestTimeoutMs = Number.isFinite(options.requestTimeoutMs) && options.requestTimeoutMs > 0 ? options.requestTimeoutMs : 12000;
     const instance = uuid();
-    let serial = 0, authenticated = mode === "local", busy = null, problem = mode === "local" ? null : {state:"loading",message:"正在读取共享记录。"};
+    let serial = 0, cloudReady = mode === "local", busy = null, problem = mode === "local" ? null : {state:"loading",message:"正在读取共享记录。"};
     let lastStatus = "", lastChange = "";
     const listeners = new Set();
     const lastCheckpoint = new Map();
@@ -54,7 +54,7 @@ globalThis.RehabPersistence = (() => {
       try { pending = operations().length; conflictList = conflicts(); }
       catch { return {state:"error",message:"无法读取本地恢复数据，请检查网站存储。",pending:0,conflicts:[],mode}; }
       let state = problem?.state || (conflictList.length ? "conflict" : pending ? "pending" : "synced");
-      if (conflictList.length && !["locked","loading","error"].includes(state)) state = "conflict";
+      if (conflictList.length && !["loading","error"].includes(state)) state = "conflict";
       const messages = {synced:mode === "local" ? "隔离模式，记录保存在本地。" : "共享记录已同步。",pending:"记录已保留，等待同步。",conflict:"发现同步冲突，原记录已保留，请选择处理方式。"};
       return {state,message:problem?.state === state ? problem.message : messages[state],pending,conflicts:conflictList,mode};
     }
@@ -93,7 +93,7 @@ globalThis.RehabPersistence = (() => {
       } catch { return null; }
     }
     function timeZone() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } }
-    function schedule() { if (mode === "cloud" && authenticated && !problem) Promise.resolve().then(flush).catch(() => {}); }
+    function schedule() { if (mode === "cloud" && cloudReady && !problem) Promise.resolve().then(flush).catch(() => {}); }
     function enqueue(type,payload,id = `op-${uuid()}`) {
       const name = key("op",null,id), existing = read(name);
       if (existing) return existing;
@@ -171,7 +171,7 @@ globalThis.RehabPersistence = (() => {
             if (terminal && (terminal !== "completed" || snapshot.state !== "finished")) return false;
             const previous = read(key("snapshot",program,snapshot.id));
             if (previous && normalizeSnapshot(previous,program)?.groupRestSeconds !== snapshot.groupRestSeconds) return failure("本次训练的组间休息已固定，原进度已保留。");
-            if (!previous && mode === "cloud" && !canStart()) return failure("当前无法开始新的共享训练，请先联网解锁。");
+            if (!previous && mode === "cloud" && !canStart()) return failure("当前无法开始新的共享训练，请先连接云端。");
             write(key("snapshot",program,snapshot.id),snapshot);
             write(key("active",program),snapshot.id);
             if (mode === "cloud" && !terminal && !pendingFor(program,snapshot.id).some(op => op.conflict)) {
@@ -248,7 +248,7 @@ globalThis.RehabPersistence = (() => {
       const controller = globalThis.AbortController ? new globalThis.AbortController() : null;
       let timeout;
       const network = (async () => {
-        const response = await fetcher(path,{method:body === undefined ? "GET" : "POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},...(controller ? {signal:controller.signal} : {}),...(body === undefined ? {} : {body:JSON.stringify(body)})});
+        const response = await fetcher(path,{method:body === undefined ? "GET" : "POST",credentials:"omit",cache:"no-store",headers:{"Content-Type":"application/json"},...(controller ? {signal:controller.signal} : {}),...(body === undefined ? {} : {body:JSON.stringify(body)})});
         let data;
         try { data = await response.json(); } catch { const error = new Error("服务器返回了无效内容，请稍后重试。"); error.status = response.status; throw error; }
         if (!response.ok || data.ok !== true) { const error = new Error(data.error?.message || "同步失败，请重试。"); error.status = response.status; error.code = data.error?.code; error.session = data.session; throw error; }
@@ -265,8 +265,7 @@ globalThis.RehabPersistence = (() => {
       finally { clearTimer?.(timeout); }
     }
     function networkFailure(error) {
-      if (error.status === 401) { authenticated = false; problem = {state:"locked",message:"输入共享口令后同步记录。"}; }
-      else problem = {state:error.status ? "error" : "offline",message:error.status || error.code === "request_timeout" ? error.message : "网络暂不可用，已保留待同步记录。"};
+      problem = {state:error.status ? "error" : "offline",message:error.status || error.code === "request_timeout" ? error.message : "网络暂不可用，已保留待同步记录。"};
       emit();
     }
     function rememberSession(session) {
@@ -316,16 +315,16 @@ globalThis.RehabPersistence = (() => {
     async function refresh() {
       if (mode === "local") { emit(); return status(); }
       try {
-        const data = await request("/api/state"); authenticated = true;
+        const data = await request("/api/state");
         for (const record of data.records || []) rememberRecord(record);
         for (const session of data.sessions || []) rememberSession(session);
-        problem = null; emit(true); return status();
+        cloudReady = true; problem = null; emit(true); return status();
       } catch (error) { networkFailure(error); return status(); }
     }
     async function flush() {
       if (busy) return busy;
-      if (mode === "cloud" && !authenticated && problem?.state === "offline") await refresh();
-      if (mode === "local" || !authenticated) { emit(); return status(); }
+      if (mode === "cloud" && !cloudReady) await refresh();
+      if (mode === "local" || !cloudReady) { emit(); return status(); }
       busy = (async () => {
         let refreshNeeded = false;
         try {
@@ -360,26 +359,14 @@ globalThis.RehabPersistence = (() => {
       })();
       try { return await busy; } finally { busy = null; }
     }
-    function canStart() { return mode === "local" || (authenticated && !["locked","loading","offline","error"].includes(status().state)); }
-    async function init() { await refresh(); if (authenticated) await flush(); return status(); }
-    async function login(passphrase) {
-      if (mode === "local") return status();
-      try { await request("/api/login",{passphrase}); authenticated = true; problem = null; await refresh(); await flush(); }
-      catch (error) { networkFailure(error); }
-      return status();
-    }
-    async function logout() {
-      if (mode === "local") return status();
-      try { await request("/api/logout",{}); authenticated = false; problem = {state:"locked",message:"已锁定，待同步数据保留在本设备。"}; emit(true); }
-      catch (error) { networkFailure(error); }
-      return status();
-    }
+    function canStart() { return mode === "local" || (cloudReady && !["loading","offline","error"].includes(status().state)); }
+    async function init() { await refresh(); if (cloudReady) await flush(); return status(); }
     function sessions() {
       try { return entries("session").map(entry => copy(entry.value)).filter(session => session.status === "active"); }
       catch { failure("无法读取可继续的训练。"); return []; }
     }
     async function claimSession(id,program) {
-      if (mode !== "cloud" || !authenticated || ["offline","locked","error","loading"].includes(status().state)) throw new Error("请联网解锁后接管训练。");
+      if (mode !== "cloud" || !cloudReady || ["offline","error","loading"].includes(status().state)) throw new Error("请连接云端后接管训练。");
       const candidates = sessions().filter(session => session.id === id && (!program || session.program === program));
       if (candidates.length !== 1) throw new Error("请选择明确的可继续训练。");
       const session = candidates[0];
@@ -459,7 +446,7 @@ globalThis.RehabPersistence = (() => {
       if (!["cloud","copy"].includes(choice)) throw new Error("未知冲突处理方式。");
       if (choice === "copy") {
         const completion = op?.sessionId && pendingFor(op.program,op.sessionId).find(item => item.type === "complete");
-        if (!completion || !authenticated || ["offline","locked","error"].includes(status().state)) throw new Error("只有联网后才能将本地完整训练另存。");
+        if (!completion || !cloudReady || ["offline","error"].includes(status().state)) throw new Error("只有联网后才能将本地完整训练另存。");
         const intentKey = key("copy-intent",op.program,op.sessionId);
         let intent = read(intentKey);
         if (!intent) {
@@ -501,7 +488,7 @@ globalThis.RehabPersistence = (() => {
     globalThis.addEventListener?.("storage",storageChanged);
     const online = () => { if (mode === "cloud") init(); };
     globalThis.addEventListener?.("online",online);
-    return {mode,prefix:base,forProgram,status,subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },init,refresh,login,logout,flush,canStart,sessions,claimSession,conflicts,resolveConflict,isSynced,scanLegacy,importLegacy,backupLegacy,destroy() { globalThis.removeEventListener?.("storage",storageChanged); globalThis.removeEventListener?.("online",online); listeners.clear(); }};
+    return {mode,prefix:base,forProgram,status,subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },init,refresh,flush,canStart,sessions,claimSession,conflicts,resolveConflict,isSynced,scanLegacy,importLegacy,backupLegacy,destroy() { globalThis.removeEventListener?.("storage",storageChanged); globalThis.removeEventListener?.("online",online); listeners.clear(); }};
   }
   return {create};
 })();

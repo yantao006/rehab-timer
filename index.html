@@ -163,11 +163,6 @@ summary { cursor:pointer; font-weight:700; padding:14px 0; }
 .section-top { display:flex; align-items:center; justify-content:space-between; gap:14px; }
 .section-top h2 { font-size:1.15rem; }
 .cloud-status { font-size:.88rem; color:var(--muted); line-height:1.65; margin:8px 0; }
-.unlock-form { margin-top:16px; }
-.unlock-form label { display:block; margin-bottom:7px; font-weight:700; font-size:.9rem; }
-.input-row { display:flex; gap:10px; }
-.input-row input { flex:1; width:0; padding:10px 12px; border:1px solid var(--line); background:white; border-radius:12px; color:var(--ink); }
-.unlock-form .muted-note { margin-top:8px; }
 .cloud-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:13px; }
 .cloud-actions .control { font-size:.85rem; min-height:44px; padding:8px 14px; }
 .management-details { margin-top:18px; padding-top:4px; border-top:1px solid var(--line); font-size:.88rem; }
@@ -263,11 +258,8 @@ summary { cursor:pointer; font-weight:700; padding:14px 0; }
       <section class="cloud-panel" id="cloudPanel" aria-labelledby="cloudTitle" hidden>
         <div class="section-top"><h2 id="cloudTitle">共享记录与同步</h2><button class="text-button" id="closeCloudButton" type="button">收起</button></div>
         <p id="cloudStatus" class="cloud-status" role="status"></p>
-        <form id="unlockForm" class="unlock-form" hidden>
-          <label for="sharedPassword">共享口令</label><div class="input-row"><input id="sharedPassword" type="password" autocomplete="current-password" required placeholder="输入共享口令"><button class="control primary" id="unlockButton" type="submit">解锁</button></div>
-          <p class="muted-note">共用一份训练记录，不区分个人。</p>
-        </form>
-        <div class="cloud-actions"><button class="control" id="syncRetryButton" type="button">重试同步</button><button class="text-button" id="logoutButton" type="button" hidden>锁定共享记录</button></div>
+        <p class="muted-note">共用一份训练记录，打开即可使用。</p>
+        <div class="cloud-actions"><button class="control" id="syncRetryButton" type="button">重试同步</button></div>
         <p class="notice" id="cloudActionMessage" role="status" hidden></p>
         <section class="conflict-panel" id="conflictPanel" aria-labelledby="conflictTitle" hidden><h3 id="conflictTitle">有记录需要处理</h3><p class="muted-note">云端版本已变化，本设备的相关同步已停止。请明确选择，不会自动覆盖。</p><div id="conflictList"></div></section>
         <details id="remoteDetails" class="management-details"><summary>从云端恢复暂停的训练</summary><p class="muted-note">只在你选择后恢复。需要联网取得这次训练的写入权；另一设备的旧进度不会自动覆盖它。</p><button class="control" id="refreshSessionsButton" type="button">刷新可恢复训练</button><div id="remoteSessions" class="remote-list"></div></details>
@@ -703,7 +695,7 @@ globalThis.RehabPersistence = (() => {
     const clearTimer = options.clearTimeout || globalThis.clearTimeout?.bind(globalThis);
     const requestTimeoutMs = Number.isFinite(options.requestTimeoutMs) && options.requestTimeoutMs > 0 ? options.requestTimeoutMs : 12000;
     const instance = uuid();
-    let serial = 0, authenticated = mode === "local", busy = null, problem = mode === "local" ? null : {state:"loading",message:"正在读取共享记录。"};
+    let serial = 0, cloudReady = mode === "local", busy = null, problem = mode === "local" ? null : {state:"loading",message:"正在读取共享记录。"};
     let lastStatus = "", lastChange = "";
     const listeners = new Set();
     const lastCheckpoint = new Map();
@@ -732,7 +724,7 @@ globalThis.RehabPersistence = (() => {
       try { pending = operations().length; conflictList = conflicts(); }
       catch { return {state:"error",message:"无法读取本地恢复数据，请检查网站存储。",pending:0,conflicts:[],mode}; }
       let state = problem?.state || (conflictList.length ? "conflict" : pending ? "pending" : "synced");
-      if (conflictList.length && !["locked","loading","error"].includes(state)) state = "conflict";
+      if (conflictList.length && !["loading","error"].includes(state)) state = "conflict";
       const messages = {synced:mode === "local" ? "隔离模式，记录保存在本地。" : "共享记录已同步。",pending:"记录已保留，等待同步。",conflict:"发现同步冲突，原记录已保留，请选择处理方式。"};
       return {state,message:problem?.state === state ? problem.message : messages[state],pending,conflicts:conflictList,mode};
     }
@@ -771,7 +763,7 @@ globalThis.RehabPersistence = (() => {
       } catch { return null; }
     }
     function timeZone() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } }
-    function schedule() { if (mode === "cloud" && authenticated && !problem) Promise.resolve().then(flush).catch(() => {}); }
+    function schedule() { if (mode === "cloud" && cloudReady && !problem) Promise.resolve().then(flush).catch(() => {}); }
     function enqueue(type,payload,id = `op-${uuid()}`) {
       const name = key("op",null,id), existing = read(name);
       if (existing) return existing;
@@ -849,7 +841,7 @@ globalThis.RehabPersistence = (() => {
             if (terminal && (terminal !== "completed" || snapshot.state !== "finished")) return false;
             const previous = read(key("snapshot",program,snapshot.id));
             if (previous && normalizeSnapshot(previous,program)?.groupRestSeconds !== snapshot.groupRestSeconds) return failure("本次训练的组间休息已固定，原进度已保留。");
-            if (!previous && mode === "cloud" && !canStart()) return failure("当前无法开始新的共享训练，请先联网解锁。");
+            if (!previous && mode === "cloud" && !canStart()) return failure("当前无法开始新的共享训练，请先连接云端。");
             write(key("snapshot",program,snapshot.id),snapshot);
             write(key("active",program),snapshot.id);
             if (mode === "cloud" && !terminal && !pendingFor(program,snapshot.id).some(op => op.conflict)) {
@@ -926,7 +918,7 @@ globalThis.RehabPersistence = (() => {
       const controller = globalThis.AbortController ? new globalThis.AbortController() : null;
       let timeout;
       const network = (async () => {
-        const response = await fetcher(path,{method:body === undefined ? "GET" : "POST",credentials:"same-origin",cache:"no-store",headers:{"Content-Type":"application/json"},...(controller ? {signal:controller.signal} : {}),...(body === undefined ? {} : {body:JSON.stringify(body)})});
+        const response = await fetcher(path,{method:body === undefined ? "GET" : "POST",credentials:"omit",cache:"no-store",headers:{"Content-Type":"application/json"},...(controller ? {signal:controller.signal} : {}),...(body === undefined ? {} : {body:JSON.stringify(body)})});
         let data;
         try { data = await response.json(); } catch { const error = new Error("服务器返回了无效内容，请稍后重试。"); error.status = response.status; throw error; }
         if (!response.ok || data.ok !== true) { const error = new Error(data.error?.message || "同步失败，请重试。"); error.status = response.status; error.code = data.error?.code; error.session = data.session; throw error; }
@@ -943,8 +935,7 @@ globalThis.RehabPersistence = (() => {
       finally { clearTimer?.(timeout); }
     }
     function networkFailure(error) {
-      if (error.status === 401) { authenticated = false; problem = {state:"locked",message:"输入共享口令后同步记录。"}; }
-      else problem = {state:error.status ? "error" : "offline",message:error.status || error.code === "request_timeout" ? error.message : "网络暂不可用，已保留待同步记录。"};
+      problem = {state:error.status ? "error" : "offline",message:error.status || error.code === "request_timeout" ? error.message : "网络暂不可用，已保留待同步记录。"};
       emit();
     }
     function rememberSession(session) {
@@ -994,16 +985,16 @@ globalThis.RehabPersistence = (() => {
     async function refresh() {
       if (mode === "local") { emit(); return status(); }
       try {
-        const data = await request("/api/state"); authenticated = true;
+        const data = await request("/api/state");
         for (const record of data.records || []) rememberRecord(record);
         for (const session of data.sessions || []) rememberSession(session);
-        problem = null; emit(true); return status();
+        cloudReady = true; problem = null; emit(true); return status();
       } catch (error) { networkFailure(error); return status(); }
     }
     async function flush() {
       if (busy) return busy;
-      if (mode === "cloud" && !authenticated && problem?.state === "offline") await refresh();
-      if (mode === "local" || !authenticated) { emit(); return status(); }
+      if (mode === "cloud" && !cloudReady) await refresh();
+      if (mode === "local" || !cloudReady) { emit(); return status(); }
       busy = (async () => {
         let refreshNeeded = false;
         try {
@@ -1038,26 +1029,14 @@ globalThis.RehabPersistence = (() => {
       })();
       try { return await busy; } finally { busy = null; }
     }
-    function canStart() { return mode === "local" || (authenticated && !["locked","loading","offline","error"].includes(status().state)); }
-    async function init() { await refresh(); if (authenticated) await flush(); return status(); }
-    async function login(passphrase) {
-      if (mode === "local") return status();
-      try { await request("/api/login",{passphrase}); authenticated = true; problem = null; await refresh(); await flush(); }
-      catch (error) { networkFailure(error); }
-      return status();
-    }
-    async function logout() {
-      if (mode === "local") return status();
-      try { await request("/api/logout",{}); authenticated = false; problem = {state:"locked",message:"已锁定，待同步数据保留在本设备。"}; emit(true); }
-      catch (error) { networkFailure(error); }
-      return status();
-    }
+    function canStart() { return mode === "local" || (cloudReady && !["loading","offline","error"].includes(status().state)); }
+    async function init() { await refresh(); if (cloudReady) await flush(); return status(); }
     function sessions() {
       try { return entries("session").map(entry => copy(entry.value)).filter(session => session.status === "active"); }
       catch { failure("无法读取可继续的训练。"); return []; }
     }
     async function claimSession(id,program) {
-      if (mode !== "cloud" || !authenticated || ["offline","locked","error","loading"].includes(status().state)) throw new Error("请联网解锁后接管训练。");
+      if (mode !== "cloud" || !cloudReady || ["offline","error","loading"].includes(status().state)) throw new Error("请连接云端后接管训练。");
       const candidates = sessions().filter(session => session.id === id && (!program || session.program === program));
       if (candidates.length !== 1) throw new Error("请选择明确的可继续训练。");
       const session = candidates[0];
@@ -1137,7 +1116,7 @@ globalThis.RehabPersistence = (() => {
       if (!["cloud","copy"].includes(choice)) throw new Error("未知冲突处理方式。");
       if (choice === "copy") {
         const completion = op?.sessionId && pendingFor(op.program,op.sessionId).find(item => item.type === "complete");
-        if (!completion || !authenticated || ["offline","locked","error"].includes(status().state)) throw new Error("只有联网后才能将本地完整训练另存。");
+        if (!completion || !cloudReady || ["offline","error"].includes(status().state)) throw new Error("只有联网后才能将本地完整训练另存。");
         const intentKey = key("copy-intent",op.program,op.sessionId);
         let intent = read(intentKey);
         if (!intent) {
@@ -1179,7 +1158,7 @@ globalThis.RehabPersistence = (() => {
     globalThis.addEventListener?.("storage",storageChanged);
     const online = () => { if (mode === "cloud") init(); };
     globalThis.addEventListener?.("online",online);
-    return {mode,prefix:base,forProgram,status,subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },init,refresh,login,logout,flush,canStart,sessions,claimSession,conflicts,resolveConflict,isSynced,scanLegacy,importLegacy,backupLegacy,destroy() { globalThis.removeEventListener?.("storage",storageChanged); globalThis.removeEventListener?.("online",online); listeners.clear(); }};
+    return {mode,prefix:base,forProgram,status,subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },init,refresh,flush,canStart,sessions,claimSession,conflicts,resolveConflict,isSynced,scanLegacy,importLegacy,backupLegacy,destroy() { globalThis.removeEventListener?.("storage",storageChanged); globalThis.removeEventListener?.("online",online); listeners.clear(); }};
   }
   return {create};
 })();</script>
@@ -1587,7 +1566,7 @@ globalThis.RehabPersistence = (() => {
     const synced=savedCompletion&&repository.isSynced(program,engine.id);
     text("finishedMeta",`${program===PROGRAM?"原计划":"下肢关节居家训练"} · ${engine.completion?.date||localDate(new Date())}`);
     text("completionStatus",!savedCompletion?"记录尚未保存":mode==="local"?"记录已保存在隔离预览":synced?"记录已同步到云端":"训练已完成，记录等待同步");
-    text("completionHint",!savedCompletion?"请重试保存。结束或返回不会假装保存成功。":mode==="local"?"这是本地隔离记录，不会写入正式云端。":synced?"其他设备解锁后可查看这次完成。":"已保留在本设备。联网并解锁后会自动重试，请不要清除浏览器数据。");
+    text("completionHint",!savedCompletion?"请重试保存。结束或返回不会假装保存成功。":mode==="local"?"这是本地隔离记录，不会写入正式云端。":synced?"其他设备打开后可查看这次完成。":"已保留在本设备。联网后会自动重试，请不要清除浏览器数据。");
     $("retrySaveButton").hidden=savedCompletion&&synced;
     text("retrySaveButton",savedCompletion?"重试同步":"重试保存记录");
   }
@@ -1757,11 +1736,9 @@ globalThis.RehabPersistence = (() => {
     $("cloudTitle").scrollIntoView?.({block:"start",behavior:"auto"});
   }
   function renderCloud(force=false){
-    const status=repository.status(),labels={loading:"读取云端中",locked:"共享记录待解锁",synced:mode==="local"?"隔离预览记录":"已同步",pending:"等待同步",offline:"离线，进度保留",error:"同步未完成",conflict:"有同步冲突"};
+    const status=repository.status(),labels={loading:"读取云端中",synced:mode==="local"?"隔离预览记录":"已同步",pending:"等待同步",offline:"离线，进度保留",error:"同步未完成",conflict:"有同步冲突"};
     text("syncSummary",labels[status.state]||"记录状态");$("openCloudButton").dataset.state=status.state;
     text("cloudStatus",mode==="local"?"当前为本地隔离预览，所有记录与正式云端分开，不会联网同步。":status.message||labels[status.state]||"正在检查同步状态。");
-    $("unlockForm").hidden=mode!=="cloud"||status.state!=="locked";
-    $("logoutButton").hidden=mode!=="cloud"||["locked","loading"].includes(status.state);
     $("syncRetryButton").hidden=mode==="local";
     $("syncRetryButton").disabled=cloudBusy||status.state==="loading";
     $("remoteDetails").hidden=mode!=="cloud";$("migrationDetails").hidden=mode!=="cloud";
@@ -1780,7 +1757,7 @@ globalThis.RehabPersistence = (() => {
     }
     const remote=$("remoteSessions");remote.replaceChildren();
     const resumable=sessions.filter(session=>!["finished","completed","abandoned"].includes(session.status)&&session.snapshot&&programs[session.program]);
-    if(!resumable.length){const empty=document.createElement("p");empty.className="muted-note";empty.textContent=status.state==="locked"?"解锁后可以查看云端暂停进度。":"没有其他可恢复的训练。";remote.append(empty);}
+    if(!resumable.length){const empty=document.createElement("p");empty.className="muted-note";empty.textContent="没有其他可恢复的训练。";remote.append(empty);}
     for(const session of resumable){
       const row=document.createElement("div");row.className="remote-row";const heading=document.createElement("h4"),detail=document.createElement("p"),button=document.createElement("button");
       const schedule=programs[session.program],item=planFor(session.program,session.snapshot.groupRestSeconds??60)[session.snapshot.index],own=repository.forProgram(session.program).loadProgress()?.id===session.id;
@@ -1879,7 +1856,7 @@ globalThis.RehabPersistence = (() => {
     syncPlan();render();log("group-rest-selected",{seconds:selected});
   });
   $("startButton").addEventListener("click",()=>{
-    if(!repository.canStart()){showMessage("startMessage",mode==="cloud"?"开始新的训练前，请先联网并解锁共享记录。已有暂停进度仍可继续。":"本地保存不可用，请检查浏览器存储后重试。");openCloud();return;}
+    if(!repository.canStart()){showMessage("startMessage",mode==="cloud"?"正在连接共享记录，请联网后重试。已有暂停进度仍可继续。":"本地保存不可用，请检查浏览器存储后重试。");openCloud();return;}
     if(engine.state==="finished"){
       if(!savedCompletion){showMessage("startMessage","上一条完成记录尚未保留，请先重试保存。");view="training";render();return;}
       engine=new Engine(unitMs,program,preferredGroupRestSeconds);savedCompletion=false;syncPlan();
@@ -1941,8 +1918,6 @@ globalThis.RehabPersistence = (() => {
   }
   $("openCloudButton").addEventListener("click",openCloud);$("trainingSyncButton").addEventListener("click",openCloud);
   $("closeCloudButton").addEventListener("click",()=>{$("cloudPanel").hidden=true;$("openCloudButton").setAttribute("aria-expanded","false");$("openCloudButton").focus();});
-  $("unlockForm").addEventListener("submit",event=>{event.preventDefault();const passphrase=$("sharedPassword").value;if(!passphrase)return;runCloudAction($("unlockButton"),async()=>{const result=await repository.login(passphrase);if(["locked","offline","error","loading"].includes(result.state))throw new Error(result.message||"共享记录尚未解锁，请重试。");$("sharedPassword").value="";history=store.history();renderCalendar();render();showMessage("cloudActionMessage","共享记录已解锁。");});});
-  $("logoutButton").addEventListener("click",()=>runCloudAction($("logoutButton"),()=>repository.logout()));
   $("syncRetryButton").addEventListener("click",()=>runCloudAction($("syncRetryButton"),async()=>{await repository.flush();await repository.refresh();}));
   $("refreshSessionsButton").addEventListener("click",()=>runCloudAction($("refreshSessionsButton"),()=>repository.refresh()));
   $("scanLegacyButton").addEventListener("click",()=>{

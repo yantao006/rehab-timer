@@ -8,7 +8,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Standard timing follows continuous stage audio; fallback/debug timing uses absolute monotonic boundaries, not callback counts. Restore never consumes offline time; stage boundaries and the second manual group require explicit continuation.
 - One retained HTML media element owns speech and beeps. First play must stay synchronous with the user gesture. Decoder events prove neither physical audibility nor iOS compatibility; see `README.md` for sound acceptance.
 - The existing `rehab-timer` Pages project uses direct upload, not Git integration. See `README.md` for publication boundaries; a merged PR is not proof of production deployment.
-- D1 is authoritative, with independent production/preview bindings in `wrangler.jsonc`. API authentication uses shared secrets, not users. Keep local outbox completion independent of current progress; idempotent acknowledgments must not regress newer revisions or revocations.
+- D1 is authoritative, with independent production/preview bindings in `wrangler.jsonc`. Shared records are open without login; `SESSION_SECRET` only signs session write-ownership tokens. Keep local outbox completion independent of current progress; idempotent acknowledgments must not regress newer revisions or revocations.
 - Migrate raw v1 keys only through the backup/preview/import flow. Never migrate the old Store.history projection or test prefixes; preserve raw originals and constrain date overrides to explicitly imported record IDs. See `docs/sync-api.md`.
 - Product constraints and visual-system decisions are authoritative in `PRODUCT.md` and `DESIGN.md`.
 
