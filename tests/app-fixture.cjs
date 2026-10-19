@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const html = fs.readFileSync(require('node:path').join(__dirname,'../index.html'),'utf8');
 const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
-module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0, mediaDelays={}, storage=new Map(),search='?test=1',protocol='file:',nativeSeekFailure=false,blobSeekFailure=false,stageFetchFailure=false,wallClock=false}={}) {
+module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0, mediaDelays={}, storage=new Map(),search='?test=1',protocol='file:',nativeSeekFailure=false,blobSeekFailure=false,stageFetchFailure=false,wallClock=false,apiFetch=null}={}) {
   let now=0, serial=0, gesture=false;
   let wallOffset=0;
   const wallOrigin=typeof wallClock==='number'?wallClock:Date.parse('2026-10-17T04:00:00.000Z');
@@ -76,8 +76,9 @@ module.exports = function appFixture({rejectPlay=false, stuck=false, beepDelay=0
   const context=vm.createContext({Date:wallClock===false?Date:FixtureDate,URLSearchParams,performance:{now:()=>now},setTimeout:setTimer,clearTimeout:id=>timers.delete(id),
     localStorage,document,location:{search,protocol},navigator:{audioSession:{}},crypto:{randomUUID:()=>`synthetic-app-${++serial}`},
     AbortController,URL:{createObjectURL:blob=>`blob:synthetic/${blob.source}`,revokeObjectURL(){}},
-    fetch:async source=>{
+    fetch:async (source,options)=>{
       fetchRequests.push(source);
+      if(apiFetch&&String(source).startsWith('/api/'))return apiFetch(source,options);
       if(!String(source).endsWith('.mp3')||stageFetchFailure)throw new Error('Synthetic asset unavailable');
       return {ok:true,blob:async()=>({source,size:1000,type:'audio/mpeg'})};
     }});
