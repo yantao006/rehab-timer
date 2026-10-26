@@ -648,7 +648,7 @@
       point.querySelector(".stage-number").textContent=i+1;point.querySelector(".stage-label").textContent=stage.short;$("stageProgress").append(point);
       const line=document.createElement("li"),name=document.createElement("span"),dose=document.createElement("span");name.className="routine-name";dose.className="routine-dose";
       name.textContent=`${stage.name}${stage.equipment?` · ${stage.equipment}`:""}`;
-      dose.textContent=program===PROGRAM?(i<4?`训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 ${engine.groupRestSeconds} 秒，可跳过。`:"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮；前三轮结束后休息 30 秒，可跳过，第 4 轮后直接完成。"):(i<4?`训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 ${engine.groupRestSeconds} 秒可跳过，节间休息 60 秒。`:"每组 8 到 10 次，共 2 组。逐组点完成，不计时。");
+      dose.textContent=program===PROGRAM?(i<4?`训练 15 秒 / 重复间休息 5 秒，6 次 × 2 组；组间休息 ${engine.groupRestSeconds} 秒，可跳过。`:"踮脚 30 秒接拉伸 30 秒为一轮，共 4 轮；前三轮结束后休息 30 秒，可跳过，第 4 轮后直接完成。"):(i<4?`训练 15 秒 / 重复间休息 7 秒，6 次 × 2 组；组间休息 ${engine.groupRestSeconds} 秒可跳过，节间休息 60 秒。`:"每组 8 到 10 次，共 2 组。逐组点完成，不计时。");
       line.append(name,dose);$("routineList").append(line);
     });
     for(const [id,selected]of [["originalTab",program===PROGRAM],["jointTab",program===JOINT_PROGRAM]]){$(id).setAttribute("aria-selected",String(selected));$(id).tabIndex=selected?0:-1;}

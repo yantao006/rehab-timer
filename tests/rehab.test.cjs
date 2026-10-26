@@ -118,7 +118,7 @@ test('下肢前四节末次直接60秒组休或节休，原计划组休不变，
     const actual = jointPlan.filter(p => p.stage === stage && !['prep','stage-rest'].includes(p.kind));
     const original = plan.filter(p => p.stage === stage && p.kind !== 'prep');
     assert.deepEqual(plain(actual.map(({group,rep,kind,seconds})=>({group,rep,kind,seconds}))),
-      plain(original.map(({group,rep,kind,seconds})=>({group,rep,kind,seconds}))));
+      plain(original.map(({group,rep,kind,seconds})=>({group,rep,kind,seconds:kind === 'rest' ? 7 : seconds}))));
     assert.equal(actual.filter(p => p.kind === 'group-rest').length,1);
     assert.equal(actual.filter(p => p.kind === 'rest').length,10);
     assert.equal(jointPlan.filter(p => p.stage === stage && p.kind === 'stage-rest').length,1);
