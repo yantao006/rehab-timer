@@ -46,7 +46,7 @@
           for (let group = 1; group <= 2; group++) {
             for (let rep = 1; rep <= 6; rep++) {
               items.push({ stage, group, rep, kind: "work", seconds: 15 });
-              if (rep < 6) items.push({ stage, group, rep, kind: "rest", seconds: 5 });
+              if (rep < 6) items.push({ stage, group, rep, kind: "rest", seconds: 7 });
             }
             if (group === 1) items.push({ stage, group, rep: 6, kind: "group-rest", seconds: 60 });
           }

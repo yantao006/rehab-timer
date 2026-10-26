@@ -60,7 +60,7 @@ export function schedule(programId, planRevision = PLAN_REVISION, groupRestSecon
     for (let group = 1; group <= 2; group++) {
       for (let rep = 1; rep <= 6; rep++) {
         items.push({ stage, kind: 'work', seconds: 15 });
-        if (rep < 6) items.push({ stage, kind: 'rest', seconds: 5 });
+        if (rep < 6) items.push({ stage, kind: 'rest', seconds: joint ? 7 : 5 });
       }
       if (group === 1) items.push({ stage, kind: 'group-rest', seconds: groupRestSeconds });
     }

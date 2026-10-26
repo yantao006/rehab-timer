@@ -21,10 +21,10 @@ const originalHashes = {
   'stage-3.mp3': '1bb5e2a399be6d697cdf0cc22f8bed9701d780e00f2ba3aafbcc3ccd4291a42a',
   'stage-4.mp3': '1473c67279608556a5e9f31abd9ab8af48fa3293ac17cb9e05b705fb3ca6af88',
   'stage-5.mp3': 'eab781078309f598dbdc1fb4ad4282eb54982488fb6ebb9e694c9682e3ecffc8',
-  'stage-joint-1.mp3': '0b01e51ef9945ddc2c4622f95b82299c4da7e5a619abb51cce832b70c1852dff',
-  'stage-joint-2.mp3': 'e4a48b381753325487a477f80c1e2628ef80769eb68deec16cabd095894a7ebd',
-  'stage-joint-3.mp3': 'e4a48b381753325487a477f80c1e2628ef80769eb68deec16cabd095894a7ebd',
-  'stage-joint-4.mp3': 'e4a48b381753325487a477f80c1e2628ef80769eb68deec16cabd095894a7ebd'
+  'stage-joint-1.mp3': '22d3654c5462a4fcbca8f56a4900509046db9331cce68cac1e33e052207c62f4',
+  'stage-joint-2.mp3': 'c012955b2b96ea503f870ab50bff30b448f16953ce649a7231f4131e9ff31e61',
+  'stage-joint-3.mp3': 'c012955b2b96ea503f870ab50bff30b448f16953ce649a7231f4131e9ff31e61',
+  'stage-joint-4.mp3': 'c012955b2b96ea503f870ab50bff30b448f16953ce649a7231f4131e9ff31e61'
 };
 
 function wavDuration(buffer) {

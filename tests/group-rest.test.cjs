@@ -16,7 +16,7 @@ for(const program of [PROGRAM,JOINT_PROGRAM])for(const seconds of GROUP_REST_OPT
     assert.equal(schedule.length,base.length);
     assert.equal(schedule.filter(p=>p.kind==='group-rest').length,4);
     for(const [index,item]of schedule.entries())assert.deepEqual(plain(item),plain(base[index].kind==='group-rest'?{...base[index],seconds}:base[index]));
-    assert.equal(schedule.reduce((sum,p)=>sum+p.seconds,0),(program===PROGRAM?1520:1430)+4*(seconds-60));
+    assert.equal(schedule.reduce((sum,p)=>sum+p.seconds,0),(program===PROGRAM?1520:1510)+4*(seconds-60));
     const engine=new Engine(1000,program,seconds);engine.start('synthetic-configured-full');engine.arm(0);
     let now=0,waits=0,manuals=0;
     const visited=new Set();
