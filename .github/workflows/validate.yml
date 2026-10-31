@@ -13,5 +13,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: 源码与发布文件一致性、训练规则、同步及数据库测试
+      - name: 构建一致性、训练规则、存储与接口测试
         run: npm run validate
