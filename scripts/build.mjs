@@ -1,11 +1,19 @@
-import { readFile, writeFile, mkdir, cp } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 let html = await readFile(path.join(root, 'src/template.html'), 'utf8');
-for (const [marker, file] of Object.entries({ STYLES: 'styles.css', CORE: 'core.js', REPOSITORY: 'repository.js', APP: 'app.js' })) {
-  const source = await readFile(path.join(root, 'src', file), 'utf8');
+const voice = JSON.parse(await readFile(path.join(root, 'audio/voice.json'), 'utf8'));
+const sources = {
+  STYLES: await readFile(path.join(root, 'src/styles.css'), 'utf8'),
+  VOICE: `globalThis.RehabVoice = Object.freeze(${JSON.stringify(voice)});`,
+  CORE: await readFile(path.join(root, 'src/core.js'), 'utf8'),
+  AUDIO: await readFile(path.join(root, 'src/audio.js'), 'utf8'),
+  STORE: await readFile(path.join(root, 'src/store.js'), 'utf8'),
+  APP: await readFile(path.join(root, 'src/app.js'), 'utf8')
+};
+for (const [marker, source] of Object.entries(sources)) {
   const needle = `/* BUILD:${marker} */`;
   if (!html.includes(needle)) throw new Error(`Missing build marker: ${marker}`);
   html = html.replace(needle, () => source.trimEnd());
@@ -18,9 +26,12 @@ if (process.argv.includes('--check')) {
 }
 if (process.argv.includes('--publish')) {
   const out = path.join(root, '.publish');
-  await mkdir(out, { recursive: true });
+  await rm(out, { recursive: true, force: true });
+  await mkdir(path.join(out, 'audio'), { recursive: true });
   await writeFile(path.join(out, 'index.html'), html);
-  await cp(path.join(root, 'audio'), path.join(out, 'audio'), { recursive: true });
+  await copyFile(path.join(root, 'audio/voice.wav'), path.join(out, 'audio/voice.wav'));
   await writeFile(path.join(out, '_routes.json'), JSON.stringify({ version: 1, include: ['/api/*'], exclude: [] }, null, 2) + '\n');
+  // The voice sprite is versioned by query string, so it can be cached for a long time.
+  await writeFile(path.join(out, '_headers'), '/audio/voice.wav\n  Cache-Control: public, max-age=31536000, immutable\n/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n');
 }
 console.log(process.argv.includes('--check') ? 'Build output matches source.' : 'Built index.html from src/.');

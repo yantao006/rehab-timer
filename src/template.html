@@ -4,78 +4,174 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light">
-  <meta name="theme-color" content="#eaf4f3">
+  <meta name="theme-color" content="#eef6f5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="康复训练">
   <title>康复训练计时器</title>
   <style>/* BUILD:STYLES */</style>
 </head>
 <body>
-  <div class="app-shell" id="appShell" data-view="home">
-    <header class="site-header" id="siteHeader">
-      <div><p class="eyebrow">按自己的节奏，完成每一次</p><h1>康复训练计时器</h1></div>
-      <button class="sync-indicator" id="openCloudButton" type="button" aria-controls="cloudPanel" aria-expanded="false"><span class="sync-dot" aria-hidden="true"></span><span id="syncSummary">正在读取记录</span></button>
-    </header>
-    <main>
-      <p class="debug-badge" id="debugBadge" hidden></p>
-      <section class="cloud-panel" id="cloudPanel" aria-labelledby="cloudTitle" hidden>
-        <div class="section-top"><h2 id="cloudTitle">共享记录与同步</h2><button class="text-button" id="closeCloudButton" type="button">收起</button></div>
-        <p id="cloudStatus" class="cloud-status" role="status"></p>
-        <p class="muted-note">共用一份训练记录，打开即可使用。</p>
-        <div class="cloud-actions"><button class="control" id="syncRetryButton" type="button">重试同步</button></div>
-        <p class="notice" id="cloudActionMessage" role="status" hidden></p>
-        <section class="conflict-panel" id="conflictPanel" aria-labelledby="conflictTitle" hidden><h3 id="conflictTitle">有记录需要处理</h3><p class="muted-note">云端版本已变化，本设备的相关同步已停止。请明确选择，不会自动覆盖。</p><div id="conflictList"></div></section>
-        <details id="remoteDetails" class="management-details"><summary>从云端恢复暂停的训练</summary><p class="muted-note">只在你选择后恢复。需要联网取得这次训练的写入权；另一设备的旧进度不会自动覆盖它。</p><button class="control" id="refreshSessionsButton" type="button">刷新可恢复训练</button><div id="remoteSessions" class="remote-list"></div></details>
-        <details id="migrationDetails" class="management-details"><summary>导入本浏览器的旧记录</summary><p class="muted-note">先检查并下载备份，再确认导入。原有数据保留，重试不会重复添加。</p><button class="control" id="scanLegacyButton" type="button">检查旧记录</button><div id="migrationPreview" hidden><p id="migrationSummary"></p><ul id="migrationIssues"></ul><div class="cloud-actions"><button class="control" id="backupLegacyButton" type="button">下载备份</button><button class="control primary" id="importLegacyButton" type="button">确认导入</button></div><p class="muted-note" id="migrationHint">请先下载备份，核对后再导入。</p></div></details>
-      </section>
-      <div class="plan-tabs" id="planSelector" role="tablist" aria-label="训练计划">
-        <button class="plan-tab" id="originalTab" type="button" role="tab" aria-selected="true" aria-controls="planContent" tabindex="0">原计划</button>
-        <button class="plan-tab" id="jointTab" type="button" role="tab" aria-selected="false" aria-controls="planContent" tabindex="-1">下肢关节居家训练</button>
+  <svg width="0" height="0" class="sprite" aria-hidden="true" focusable="false">
+    <defs>
+      <!-- Exercise pictograms (placeholder line art, 64x40). Postures pending confirmation against the therapist's photos. -->
+      <symbol id="art-hipext" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34L57 33"/><path d="M34 31L46 25L45 12.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><rect x="41.5" y="6.5" width="7" height="5.5" rx="1.3" fill="#f36a32"/></symbol>
+      <symbol id="art-slr" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 22L51 34.5"/><path d="M34 31L56 16.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><rect x="52" y="11.5" width="7" height="5.5" rx="1.3" transform="rotate(-33 55.5 14.25)" fill="#f36a32"/></symbol>
+      <symbol id="art-hipadd" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 18L51 34.5"/><path d="M17 31L13.5 35"/><path d="M60.5 12V25" stroke-width="2.4"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><path d="M43.5 18.5L60.5 18.5" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round"/></symbol>
+      <symbol id="art-ankle" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M11 12L13 31H43"/><path d="M43 31L46.5 21"/><path d="M11 16L19 24"/><path d="M60.5 21V34" stroke-width="2.4"/></g><circle cx="10.5" cy="7.5" r="3.8" fill="currentColor"/><path d="M46 23L60.5 27" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round"/><path d="M51 13.5A6 6 0 0 0 41.5 14" fill="none" stroke="#f36a32" stroke-width="1.8" stroke-linecap="round"/></symbol>
+      <symbol id="art-calf" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M50 3V36.5" stroke-width="1.6" opacity=".45"/><path d="M30 10.5V23"/><path d="M30 14L47 16.5"/><path d="M30 23L28.5 32.5L31.5 36.5"/><path d="M30 23L32.5 32.5L35.5 36.5"/></g><circle cx="30" cy="6.5" r="3.8" fill="currentColor"/><path d="M16 33V20M12.5 23.5L16 20L19.5 23.5" fill="none" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="art-kneeres" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M10 21H25M10 21V36.5M25 21V36.5" stroke-width="2" opacity=".5"/><path d="M15 9.5L16 20H31L29 33"/><path d="M15 13L22 19"/><path d="M53 27V36.5" stroke-width="2.4"/></g><circle cx="14.5" cy="5.5" r="3.8" fill="currentColor"/><path d="M29.5 32.5H53" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round"/></symbol>
+      <symbol id="art-table" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34V16H51"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/></symbol>
+      <symbol id="art-abd" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 18L51 34.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><circle cx="43" cy="21" r="5" fill="none" stroke="#f36a32" stroke-width="2.4"/></symbol>
+      <symbol id="art-ball" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L42 18L50 34.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><circle cx="47.5" cy="20" r="5" fill="#f36a32"/></symbol>
+      <symbol id="art-step" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M22 10.5L23 23L22 36.5"/><path d="M23 23L33 21L33 31"/><path d="M22 14L16 20M22 14L28 18.5"/></g><circle cx="22" cy="6.5" r="3.8" fill="currentColor"/><path d="M41 36.5V27.5H55V36.5" fill="none" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <!-- UI icons, 24x24 -->
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6L18 18M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5H8L13 5.5V18.5L8 14.5H4Z" fill="currentColor"/><path d="M16.5 9a4.2 4.2 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+      <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5H8L13 5.5V18.5L8 14.5H4Z" fill="currentColor"/><path d="M16.5 9.5L21 14M21 9.5L16.5 14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5L10 17.5L19 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5L8 12L15 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="M9 5L16 12L9 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
+  <div class="app" id="app" data-screen="home">
+    <p class="test-badge" id="testBadge" hidden></p>
+
+    <!-- 首页：今天练哪一套 -->
+    <section class="screen light" id="home" aria-labelledby="homeTitle">
+      <div class="page">
+        <p class="eyebrow" id="homeDate"></p>
+        <h1 id="homeTitle">今天练哪一套？</h1>
+        <div class="week" id="homeWeek" aria-label="本周训练"></div>
+        <p class="muted" id="homeWeekCount"></p>
+        <div class="plan-cards" id="planCards"></div>
+        <p class="notice" id="homeNotice" role="status" hidden></p>
       </div>
-      <div id="planContent" role="tabpanel" aria-labelledby="originalTab">
-        <section id="homeView" aria-labelledby="homeTitle">
-          <div class="home-heading"><h2 id="homeTitle">准备开始今天的训练</h2><p id="homePlanMeta">5 项动作 · 语音引导</p></div>
-          <div class="session-elapsed" id="homeElapsedPanel" hidden><p class="elapsed-row"><span id="homeElapsedLabel">本次整体耗时</span><strong id="homeElapsedValue" role="timer" aria-live="off" aria-label="本次整体耗时">00:00</strong></p><p class="elapsed-hint" id="homeElapsedHint"></p></div>
-          <div class="rest-setting"><div class="rest-setting-row"><label for="groupRestSelect">组间休息</label><select id="groupRestSelect" aria-describedby="groupRestHint"><option value="60">60 秒</option><option value="90">1 分半</option><option value="120">2 分钟</option><option value="150">2 分半</option></select></div><p id="groupRestHint">前四项两组之间，可跳过。</p></div>
-          <section class="resume-panel" id="resumePanel" aria-labelledby="resumeTitle" hidden><p class="eyebrow">本设备有一段训练可以继续</p><h3 id="resumeTitle"></h3><p id="resumeMeta"></p><button class="control primary" id="resumeButton" type="button">查看并继续训练</button><button class="text-button danger" id="homeResetButton" type="button">结束这次训练</button></section>
-          <section id="idlePanel" aria-label="开始训练"><button class="start-button" id="startButton" type="button"><span class="start-inner"><svg class="start-icon" viewBox="0 0 90 56" aria-hidden="true"><path d="M4 29h10l6-17 10 34 10-27 10 20 8-12h28" fill="none"/></svg><span class="start-label">开始训练</span></span><span class="start-subtitle">30 秒准备，然后按语音开始</span></button></section>
-          <p class="notice" id="startMessage" role="status" hidden></p>
-          <div class="home-sound"><button class="control" id="homeSoundButton" type="button" aria-pressed="true">声音：开</button><button class="text-button" id="homeTestSoundButton" type="button">试听声音</button></div>
-          <p class="audio-status" id="homeAudioStatus" role="status" hidden></p>
-          <details class="routine-details"><summary>动作详情</summary><ol id="routineList"></ol></details>
-        </section>
-        <section id="trainingView" aria-label="专注训练" hidden>
-          <div class="training-top"><button class="text-button" id="backTrainingButton" type="button">返回训练</button><p id="trainingPlanLabel"></p><button class="text-button training-sync" id="trainingSyncButton" type="button">同步状态</button></div>
-          <ol class="stage-progress" id="stageProgress" aria-label="五项训练进度，仅展示，不可跳项"></ol>
-          <div class="session-elapsed" id="trainingElapsedPanel" hidden><p class="elapsed-row"><span id="trainingElapsedLabel">本次整体耗时</span><strong id="trainingElapsedValue" role="timer" aria-live="off" aria-label="本次整体耗时">00:00</strong></p><p class="elapsed-hint" id="trainingElapsedHint"></p></div>
-          <section class="running-panel" id="runningPanel" aria-label="当前训练" hidden>
-            <div class="exercise-identity"><h2 class="exercise-heading" id="exerciseName"></h2><p class="exercise-meta" id="exerciseMeta"></p></div>
-            <div class="scoreboard" id="scoreboard"><div class="interval-state"><p class="phase-name" id="phaseName"></p><p class="position-copy" id="positionCopy"></p></div><div class="clock-field"><p class="countdown" id="countdown"></p><p class="countdown-unit" id="countdownUnit"></p><p class="next-cue" id="nextCue"></p></div></div>
-            <div class="lane-progress" id="laneProgress" aria-label="当前项组次进度"></div>
-          </section>
-          <section class="finished-panel" id="finishedPanel" aria-labelledby="finishedTitle" hidden><p class="finish-count">5 <span>/ 5</span></p><h2 id="finishedTitle">训练完成</h2><p id="finishedMeta"></p><div class="completion-status"><strong id="completionStatus"></strong><p id="completionHint"></p></div><button class="control" id="retrySaveButton" type="button" hidden>重试保存记录</button></section>
-          <p class="notice" id="runtimeMessage" role="status" hidden></p>
-          <p class="notice" id="compatibilityMessage" role="status" hidden></p>
-        </section>
-        <section class="calendar-section" id="recordsView" aria-labelledby="calendarTitle" hidden>
-          <div class="calendar-top"><h2 id="calendarTitle">训练记录</h2><p id="weeklySummary"></p></div><p class="muted-note">共享记录合并统计，不区分个人。</p>
-          <div class="calendar-nav"><button class="control" id="prevMonth" type="button" aria-label="上一个月">上月</button><h3 class="month-title" id="monthTitle" aria-live="polite"></h3><button class="control" id="nextMonth" type="button" aria-label="下一个月">下月</button></div>
-          <div class="calendar-grid" id="calendarGrid" role="group" aria-label="本月日期"></div>
-          <section class="date-details" id="dateDetails" aria-labelledby="dateDetailsTitle"><div class="date-details-top"><h3 id="dateDetailsTitle"></h3><label class="date-picker" for="historyDate">选择日期<input id="historyDate" type="date" required aria-label="选择记录日期"></label></div><div id="dateRecords" class="date-records"></div><button class="control" id="markDate" type="button">补记一次完成</button><p class="muted-note" id="historyStatus" role="status"></p></section>
+    </section>
+
+    <!-- 训练准备 -->
+    <section class="screen light" id="prep" aria-labelledby="prepTitle" hidden>
+      <div class="page">
+        <div class="bar"><button class="icon-button" id="prepBack" type="button" aria-label="返回首页"><svg><use href="#i-back"/></svg></button><h1 id="prepTitle"></h1><span class="bar-spacer"></span></div>
+        <p class="muted" id="prepMeta"></p>
+        <h2 class="label">先准备好这些</h2>
+        <div class="chips" id="prepTools"></div>
+        <ol class="item-list" id="prepItems"></ol>
+        <h2 class="label" id="restLabel">组间休息</h2>
+        <div class="segmented" id="restOptions" role="radiogroup" aria-labelledby="restLabel"></div>
+        <p class="hint" id="restHint">只用于前四项的两组之间，可以跳过。</p>
+        <div class="sound-row"><button class="toggle" id="prepSound" type="button" aria-pressed="true">声音：开</button><button class="link-button" id="prepTest" type="button">试听</button></div>
+        <p class="notice" id="prepNotice" role="status" hidden></p>
+      </div>
+      <div class="dock"><button class="primary" id="prepStart" type="button">开始训练</button></div>
+    </section>
+
+    <!-- 训练进行中（深色全屏） -->
+    <section class="screen dark train" id="run" aria-label="训练进行中" hidden>
+      <div class="water" id="water" aria-hidden="true"></div>
+      <div class="train-inner">
+        <div class="train-top"><button class="icon-button" id="runExit" type="button" aria-label="暂停并结束训练"><svg><use href="#i-close"/></svg></button><p id="runPlace"></p><button class="icon-button" id="runSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
+        <div class="train-mid">
+          <svg class="train-art" id="runArt" aria-hidden="true"><use href="#art-hipext"/></svg>
+          <p class="phase" id="runPhase"></p>
+          <p class="count" id="runCount" aria-hidden="true"></p>
+          <p class="train-sub" id="runSub"></p>
+          <div class="dots" id="runDots" aria-hidden="true"></div>
+          <div class="dots dim" id="runDots2" aria-hidden="true"></div>
+        </div>
+        <div class="train-bottom">
+          <button class="pill" id="runSkip" type="button" hidden>跳过休息</button>
+          <button class="round" id="runPause" type="button" aria-label="暂停"><svg><use href="#i-pause"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 已暂停 / 手动计次（深色，无计时） -->
+    <section class="screen dark train" id="hold" aria-labelledby="holdPhase" hidden>
+      <div class="train-inner">
+        <div class="train-top"><button class="icon-button" id="holdExit" type="button" aria-label="结束训练"><svg><use href="#i-close"/></svg></button><p id="holdPlace"></p><button class="icon-button" id="holdSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
+        <div class="train-mid">
+          <div class="pause-mark" id="holdMark" aria-hidden="true"><svg><use href="#i-pause"/></svg></div>
+          <svg class="train-art" id="holdArt" aria-hidden="true" hidden><use href="#art-step"/></svg>
+          <p class="phase" id="holdPhase"></p>
+          <p class="count small-count" id="holdCount" hidden></p>
+          <p class="train-sub" id="holdSub"></p>
+          <p class="train-note" id="holdNote"></p>
+          <div class="dots" id="holdDots" aria-hidden="true"></div>
+          <p class="notice dark-notice" id="holdNotice" role="status" hidden></p>
+        </div>
+        <div class="train-bottom wide">
+          <button class="primary" id="holdPrimary" type="button"></button>
+          <button class="link-button light-link" id="holdSecondary" type="button" hidden></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 换下一项（浅色：等你操作） -->
+    <section class="screen light" id="between" aria-labelledby="betweenName" hidden>
+      <div class="page">
+        <div class="bar"><button class="icon-button" id="betweenExit" type="button" aria-label="结束训练"><svg><use href="#i-close"/></svg></button><p class="muted" id="betweenPlace"></p><button class="icon-button" id="betweenSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
+        <p class="done-line" id="betweenDone"><svg aria-hidden="true"><use href="#i-check"/></svg><span></span></p>
+        <h2 class="label">下一项</h2>
+        <div class="art-box"><svg id="betweenArt" aria-hidden="true"><use href="#art-slr"/></svg></div>
+        <p class="item-name" id="betweenName"></p>
+        <div class="chips" id="betweenChips"></div>
+        <p class="hint" id="betweenRest"></p>
+        <p class="notice" id="betweenNotice" role="status" hidden></p>
+      </div>
+      <div class="dock"><button class="primary" id="betweenStart" type="button">准备好了，开始</button><p class="hint center" id="betweenHint">点击后有 10 秒就位倒数</p></div>
+    </section>
+
+    <!-- 完成 -->
+    <section class="screen light" id="done" aria-labelledby="doneTitle" hidden>
+      <div class="page center-page">
+        <div class="big-check" aria-hidden="true"><svg><use href="#i-check"/></svg></div>
+        <h1 id="doneTitle">今天的训练完成了</h1>
+        <p class="muted" id="doneMeta"></p>
+        <div class="week" id="doneWeek" aria-label="本周训练"></div>
+        <p class="strong" id="doneCount"></p>
+      </div>
+      <div class="dock"><button class="primary" id="doneOk" type="button">好</button></div>
+    </section>
+
+    <!-- 记录 -->
+    <section class="screen light" id="records" aria-labelledby="recordsTitle" hidden>
+      <div class="page">
+        <h1 id="recordsTitle">记录</h1>
+        <div class="legend"><span><i class="dot-a"></i>左腿抗阻训练</span><span><i class="dot-b"></i>双腿关节训练</span></div>
+        <div class="month-bar"><button class="icon-button" id="prevMonth" type="button" aria-label="上个月"><svg><use href="#i-back"/></svg></button><h2 id="monthTitle" aria-live="polite"></h2><button class="icon-button" id="nextMonth" type="button" aria-label="下个月"><svg><use href="#i-next"/></svg></button></div>
+        <div class="calendar" id="calendar" role="group" aria-label="本月日期"></div>
+        <p class="muted" id="weekSummary"></p>
+        <section class="day-card" id="dayCard" aria-labelledby="dayTitle">
+          <h2 id="dayTitle"></h2>
+          <ul class="day-list" id="dayList"></ul>
+          <div class="manual-add" id="manualAdd"></div>
+          <p class="hint" id="dayMessage" role="status"></p>
         </section>
       </div>
-      <p class="notice" id="storageMessage" role="status" hidden></p>
-      <audio id="cueAudio" preload="auto" playsinline src="audio/prepare.wav" hidden></audio>
-    </main>
-    <nav class="main-nav" id="mainNav" aria-label="主导航"><button type="button" id="homeNav" aria-current="page">训练</button><button type="button" id="recordsNav">记录</button></nav>
-    <footer class="page-footer" id="pageFooter"><p class="background-reminder">首次请试听。项间需手动继续；锁屏播放取决于系统。</p><p class="local-note" id="persistenceNote">云端共享记录，本设备保留恢复进度与待同步记录。</p></footer>
+    </section>
+
+    <nav class="tabbar" id="tabbar" aria-label="主导航"><button type="button" id="tabTrain" aria-current="page">训练</button><button type="button" id="tabRecords">记录</button></nav>
+
+    <!-- 结束确认 -->
+    <div class="sheet-backdrop" id="endSheet" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+        <h2 id="endTitle">结束这次训练？</h2>
+        <p class="muted">没练完的不会记录。也可以先保留进度，稍后接着练。</p>
+        <button class="primary" id="endKeepTraining" type="button">继续训练</button>
+        <button class="secondary" id="endLater" type="button">稍后再练（保留进度）</button>
+        <button class="danger-button" id="endConfirm" type="button">结束，不记录</button>
+      </div>
+    </div>
   </div>
-  <div class="action-dock" id="actionDock" hidden><div class="action-dock-inner">
-    <div class="reset-confirm" id="resetConfirm" hidden role="group" aria-labelledby="resetQuestion"><p id="resetQuestion">结束本次？未完成不打卡，已有记录保留。</p><div class="confirm-actions"><button class="control primary" id="cancelResetButton" type="button">保留进度</button><button class="control danger" id="confirmResetButton" type="button">确认结束本次</button></div></div>
-    <div id="normalActions"><div class="primary-actions"><button class="control primary" id="pauseButton" type="button" hidden>暂停</button><button class="control primary" id="continueButton" type="button" hidden>继续训练</button><button class="control primary" id="completeButton" type="button" hidden>完成第 1 组</button><button class="control primary" id="finishedRecordsButton" type="button" hidden>查看记录</button></div>
-      <div class="secondary-actions"><button class="text-button" id="soundButton" type="button" aria-pressed="true">声音：开</button><button class="text-button" id="testSoundButton" type="button">试听声音</button><button class="text-button" id="manualPauseButton" type="button" hidden>暂停</button><button class="text-button" id="skipPrepButton" type="button" hidden>跳过准备</button><button class="text-button" id="skipRestButton" type="button" hidden>跳过休息</button><button class="text-button danger" id="resetButton" type="button">结束本次</button><button class="text-button" id="finishedHomeButton" type="button" hidden>返回训练</button></div>
-    </div><p class="audio-status" id="audioStatusText" role="status" hidden></p>
-  </div></div>
+  <audio id="player" preload="auto" playsinline></audio>
+  <script id="rehab-voice">/* BUILD:VOICE */</script>
   <script id="rehab-core">/* BUILD:CORE */</script>
-  <script id="rehab-repository">/* BUILD:REPOSITORY */</script>
+  <script id="rehab-audio">/* BUILD:AUDIO */</script>
+  <script id="rehab-store">/* BUILD:STORE */</script>
   <script id="rehab-app">/* BUILD:APP */</script>
 </body>
 </html>
