@@ -15,7 +15,7 @@
 <body>
   <svg width="0" height="0" class="sprite" aria-hidden="true" focusable="false">
     <defs>
-      <!-- Exercise pictograms (placeholder line art, 64x40). Postures pending confirmation against the therapist's photos. -->
+      <!-- Exercise pictograms (line art, 64x40). Plan B items use images/*.jpg drawn from the user's photos instead; plan A line art awaits photos. -->
       <symbol id="art-hipext" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34L57 33"/><path d="M34 31L46 25L45 12.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><rect x="41.5" y="6.5" width="7" height="5.5" rx="1.3" fill="#f36a32"/></symbol>
       <symbol id="art-slr" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 22L51 34.5"/><path d="M34 31L56 16.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><rect x="52" y="11.5" width="7" height="5.5" rx="1.3" transform="rotate(-33 55.5 14.25)" fill="#f36a32"/></symbol>
       <symbol id="art-hipadd" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 18L51 34.5"/><path d="M17 31L13.5 35"/><path d="M60.5 12V25" stroke-width="2.4"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><path d="M43.5 18.5L60.5 18.5" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round"/></symbol>
@@ -76,6 +76,7 @@
         <div class="train-top"><button class="icon-button" id="runExit" type="button" aria-label="暂停并结束训练"><svg><use href="#i-close"/></svg></button><p id="runPlace"></p><button class="icon-button" id="runSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
         <div class="train-mid">
           <svg class="train-art" id="runArt" aria-hidden="true"><use href="#art-hipext"/></svg>
+          <img class="train-photo" id="runImg" alt="" hidden>
           <p class="phase" id="runPhase"></p>
           <p class="count" id="runCount" aria-hidden="true"></p>
           <p class="train-sub" id="runSub"></p>
@@ -96,6 +97,7 @@
         <div class="train-mid">
           <div class="pause-mark" id="holdMark" aria-hidden="true"><svg><use href="#i-pause"/></svg></div>
           <svg class="train-art" id="holdArt" aria-hidden="true" hidden><use href="#art-step"/></svg>
+          <img class="train-photo" id="holdImg" alt="" hidden>
           <p class="phase" id="holdPhase"></p>
           <p class="count small-count" id="holdCount" hidden></p>
           <p class="train-sub" id="holdSub"></p>
@@ -116,7 +118,7 @@
         <div class="bar"><button class="icon-button" id="betweenExit" type="button" aria-label="结束训练"><svg><use href="#i-close"/></svg></button><p class="muted" id="betweenPlace"></p><button class="icon-button" id="betweenSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
         <p class="done-line" id="betweenDone"><svg aria-hidden="true"><use href="#i-check"/></svg><span></span></p>
         <h2 class="label">下一项</h2>
-        <div class="art-box"><svg id="betweenArt" aria-hidden="true"><use href="#art-slr"/></svg></div>
+        <div class="art-box" id="betweenBox"><svg id="betweenArt" aria-hidden="true"><use href="#art-slr"/></svg><img id="betweenImg" alt="" hidden></div>
         <p class="item-name" id="betweenName"></p>
         <div class="chips" id="betweenChips"></div>
         <p class="hint" id="betweenRest"></p>

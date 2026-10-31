@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, copyFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, cp, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -30,6 +30,7 @@ if (process.argv.includes('--publish')) {
   await mkdir(path.join(out, 'audio'), { recursive: true });
   await writeFile(path.join(out, 'index.html'), html);
   await copyFile(path.join(root, 'audio/voice.wav'), path.join(out, 'audio/voice.wav'));
+  await cp(path.join(root, 'images'), path.join(out, 'images'), { recursive: true, filter: source => !source.endsWith('.md') });
   await writeFile(path.join(out, '_routes.json'), JSON.stringify({ version: 1, include: ['/api/*'], exclude: [] }, null, 2) + '\n');
   // The voice sprite is versioned by query string, so it can be cached for a long time.
   await writeFile(path.join(out, '_headers'), '/audio/voice.wav\n  Cache-Control: public, max-age=31536000, immutable\n/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n');

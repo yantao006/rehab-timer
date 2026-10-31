@@ -11,7 +11,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - The UI must never show sync, cloud, conflict or migration state; `tests/page.test.cjs` guards the wording. Records are written locally first and uploaded silently (`src/store.js`); the API is idempotent by `(program, id)`.
 - D1 keeps the original `records` / `calendar_adjustments` tables; older tables stay read-only and must not be dropped. Production and preview bindings are separate in `wrangler.jsonc`. The `rehab-timer` Pages project uses direct upload; a merged PR is not proof of deployment.
 - Old browser data is carried over once and silently: v2 pending ops, and v1 raw keys only (never test prefixes or projected history). Original keys are preserved.
-- Product rules are authoritative in `PRODUCT.md`; visual rules in `DESIGN.md`. Exercise pictograms are placeholder line art pending the user's photos.
+- Product rules are authoritative in `PRODUCT.md`; visual rules in `DESIGN.md`. Plan B items show `images/*.jpg` illustrations generated from the user's photos (see `images/README.md`); plan A still uses line art until photos arrive. Never commit the user's raw photos. The app is for personal use only, which is why the macOS Tingting voice is acceptable.
 
 ## Maintaining this file
 

@@ -37,6 +37,15 @@
   const setText = (el, value) => { if (el.textContent !== value) el.textContent = value; };
   const show = (el, visible) => { if (el.hasAttribute("hidden") === visible) el.toggleAttribute("hidden", !visible); }; // SVG has no .hidden property
   const useArt = (svg, art) => { const use = svg.querySelector("use"); const ref = `#art-${art}`; if (use.getAttribute("href") !== ref) use.setAttribute("href", ref); };
+  // Illustrated items show their picture; the rest keep the line-art symbol.
+  function setArt(svg, img, item) {
+    if (item.image) {
+      show(svg, false);
+      if (img.getAttribute("src") !== item.image) { img.setAttribute("src", item.image); img.alt = `${item.name}示意图`; }
+      show(img, true);
+    } else { show(img, false); show(svg, true); useArt(svg, item.art); }
+  }
+  const artHtml = item => item.image ? `<img src="${item.image}" alt="" loading="lazy" decoding="async">` : `<svg aria-hidden="true"><use href="#art-${item.art}"/></svg>`;
   const planName = id => Core.PLANS[id].name;
   const today = () => new Date();
   const todayKey = () => Core.localDate(today());
@@ -245,7 +254,7 @@
     meta.textContent = `约 ${minutes(planId)} 分钟${plan.items.some(i => i.type === "manual") ? " + 1 项不计时" : ""}`;
     top.append(name, meta);
     const pics = document.createElement("div"); pics.className = "pics"; pics.setAttribute("aria-hidden", "true");
-    for (const item of plan.items) pics.insertAdjacentHTML("beforeend", `<span><svg><use href="#art-${item.art}"/></svg></span>`);
+    for (const item of plan.items) pics.insertAdjacentHTML("beforeend", `<span${item.image ? ' class="photo"' : ""}>${artHtml(item)}</span>`);
     const foot = document.createElement("div"); foot.className = "card-foot";
     const actions = document.createElement("div"); actions.className = "card-actions";
     if (session) {
@@ -294,7 +303,7 @@
     $("prepTools").replaceChildren(...(tools.length ? tools : ["不需要额外器材"]).map(text => { const c = document.createElement("span"); c.className = tools.length ? "chip tool" : "chip"; c.textContent = text; return c; }));
     $("prepItems").replaceChildren(...plan.items.map(item => {
       const li = document.createElement("li");
-      li.insertAdjacentHTML("beforeend", `<svg aria-hidden="true"><use href="#art-${item.art}"/></svg>`);
+      li.insertAdjacentHTML("beforeend", artHtml(item));
       const text = document.createElement("div");
       const b = document.createElement("b"); b.textContent = item.name;
       const dose = document.createElement("small"); dose.textContent = `${Core.itemDose(item)}${item.type === "hold" ? `，每次间休息 ${item.rest} 秒` : item.type === "rounds" ? `，前三轮后各休息 ${item.roundRest} 秒` : ""}`;
@@ -359,7 +368,7 @@
     if (!s || s.state !== "running") return;
     const item = s.current, place = s.where(t);
     setText($("runPlace"), `${s.item + 1} / ${s.items.length} · ${item.short}`);
-    useArt($("runArt"), item.art);
+    setArt($("runArt"), $("runImg"), item);
     const segment = place.segment;
     if (!segment) return;
     let phase, sub, waterClass, fraction;
@@ -439,7 +448,7 @@
     show($("holdCount"), false); show($("holdDots"), false);
     note($("holdNotice"), ui.holdNotice);
     if (s.state === "paused") {
-      show($("holdMark"), true); show($("holdArt"), false);
+      show($("holdMark"), true); show($("holdArt"), false); show($("holdImg"), false);
       setText($("holdPhase"), "已暂停");
       const segment = Core.segmentAt(s.compiled(), s.at);
       setText($("holdSub"), segment ? `${Core.describePlace(s.plan, s.item, s.at, s.groupRest)}${segment.rep ? ` · 第 ${segment.rep} 次` : ""}` : "");
@@ -450,7 +459,7 @@
       show(secondary, true); setText(secondary, ui.offerSilent ? "静音继续" : "结束训练");
       return;
     }
-    show($("holdMark"), false); show($("holdArt"), true); useArt($("holdArt"), item.art);
+    show($("holdMark"), false); setArt($("holdArt"), $("holdImg"), item);
     if (s.state === "manual") {
       setText($("holdPhase"), `第 ${s.set} 组`);
       show($("holdCount"), true); setText($("holdCount"), item.reps);
@@ -493,7 +502,8 @@
     const item = s.current;
     setText($("betweenPlace"), `${s.item + 1} / ${s.items.length}`);
     setText($("betweenDone").querySelector("span"), `第 ${s.item} 项完成`);
-    useArt($("betweenArt"), item.art);
+    setArt($("betweenArt"), $("betweenImg"), item);
+    $("betweenBox").classList.toggle("photo", Boolean(item.image));
     setText($("betweenName"), item.name);
     $("betweenChips").replaceChildren(...[...item.tools.map(t => ["chip tool", t]), ["chip", Core.itemDose(item)]].map(([cls, text]) => { const c = document.createElement("span"); c.className = cls; c.textContent = text; return c; }));
     setText($("betweenRest"), [item.equipment && item.equipment !== item.tools[0] ? `器材：${item.equipment}` : "", Core.itemRestNote(item, s.groupRest)].filter(Boolean).join(" · "));
