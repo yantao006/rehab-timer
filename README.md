@@ -31,6 +31,7 @@ https://rehab-timer.pages.dev/
 | `src/app.js` | 页面切换、播放时钟、中断处理、记录页 |
 | `src/template.html`、`src/styles.css` | 页面结构、动作示意图、样式 |
 | `audio/voice.wav`、`audio/voice.json` | 全部口令素材及每句的位置 |
+| `images/` | 双腿关节训练的动作示意图（来源见 `images/README.md`） |
 | `functions/` | Pages Functions：完成记录的读、写、撤销 |
 | `migrations/` | D1 表结构（沿用，不需要新迁移） |
 | `index.html` | 构建生成，不手工修改 |

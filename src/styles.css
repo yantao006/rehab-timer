@@ -64,6 +64,8 @@ svg { display: block; }
 .pics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .pics span { background: var(--tile); border-radius: 10px; padding: 6px 4px; display: grid; place-items: center; }
 .pics svg { width: 100%; max-width: 52px; height: 30px; color: var(--ink); }
+.pics span.photo { padding: 0; overflow: hidden; }
+.pics img { display: block; width: 100%; height: 42px; object-fit: cover; }
 .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .card-foot .muted { font-size: .85rem; }
 .resume-line { background: var(--signal-soft); border-radius: 12px; padding: 8px 10px; font-size: .88rem; }
@@ -77,9 +79,10 @@ svg { display: block; }
 .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: .85rem; }
 .chip.tool { border-color: var(--signal-line); background: var(--signal-soft); }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
-.item-list li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.item-list li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .item-list li:last-child { border-bottom: 0; }
-.item-list svg { width: 56px; height: 35px; color: var(--ink); }
+.item-list svg { width: 56px; height: 35px; color: var(--ink); justify-self: center; }
+.item-list img { display: block; width: 72px; height: 41px; object-fit: cover; border-radius: 8px; }
 .item-list b { display: block; font-size: .95rem; line-height: 1.35; font-weight: 650; }
 .item-list small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 .segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: var(--seg); border-radius: 12px; padding: 4px; }
@@ -108,6 +111,7 @@ svg { display: block; }
 .train-top p { text-align: center; font-size: .95rem; opacity: .92; }
 .train-mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; min-height: 0; padding: 12px 0; }
 .train-art { width: 120px; height: 75px; color: #fff; opacity: .92; margin-bottom: 6px; }
+.train-photo { display: block; width: min(250px, 58vw); aspect-ratio: 16 / 9; object-fit: cover; border-radius: 16px; margin-bottom: 8px; box-shadow: 0 8px 22px -12px rgba(0,0,0,.6); }
 .phase { font-size: clamp(2rem, 9vw, 3rem); font-weight: 700; letter-spacing: .06em; line-height: 1.2; }
 .count { font-family: var(--digits); font-weight: 700; font-size: clamp(9rem, 46vw, 15rem); line-height: 1; margin: .04em 0 -.08em; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .count.clock { font-size: clamp(6.5rem, 32vw, 11rem); }
@@ -133,6 +137,8 @@ svg { display: block; }
 .done-line svg { width: 20px; height: 20px; }
 .art-box { background: var(--card); border: 1px solid var(--line); border-radius: 22px; display: grid; place-items: center; padding: 22px 0; }
 .art-box svg { width: min(260px, 70%); height: auto; aspect-ratio: 64 / 40; color: var(--ink); }
+.art-box.photo { padding: 0; overflow: hidden; }
+.art-box img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
 .item-name { font-size: 1.45rem; font-weight: 700; line-height: 1.35; }
 
 /* done */

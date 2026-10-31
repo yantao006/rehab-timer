@@ -32,6 +32,13 @@ test('每个动作都有示意图符号', () => {
   vm.runInContext(fs.readFileSync(path.join(root, 'src/core.js'), 'utf8'), context);
   const arts = Object.values(context.RehabCore.PLANS).flatMap(plan => plan.items.map(item => item.art));
   for (const art of arts) assert.ok(template.includes(`id="art-${art}"`), art);
+  const images = Object.values(context.RehabCore.PLANS).flatMap(plan => plan.items.map(item => item.image)).filter(Boolean);
+  assert.equal(images.length, 5, '双腿关节训练五项都有示意图');
+  for (const image of images) {
+    const file = path.join(root, image);
+    assert.ok(fs.existsSync(file), image);
+    assert.ok(fs.statSync(file).size < 200 * 1024, `${image} 不超过 200 KB`);
+  }
 });
 
 test('界面文字不出现同步、云端、口令、登录', () => {

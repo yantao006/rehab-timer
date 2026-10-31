@@ -25,6 +25,7 @@ globalThis.RehabCore = (() => {
   const hold = extra => ({ type: "hold", hold: 15, reps: 6, sets: 2, ...extra });
 
   // Training facts are authoritative in PRODUCT.md. Names, equipment and doses must not drift.
+  // `art` is the line-art symbol in template.html; `image` (when present) is the illustration drawn from the user's photos.
   const PLANS = freeze({
     [PLAN_A]: {
       id: PLAN_A, letter: "a", name: "左腿抗阻训练", formerName: "原计划", stageRest: 0,
@@ -39,11 +40,11 @@ globalThis.RehabCore = (() => {
     [PLAN_B]: {
       id: PLAN_B, letter: "b", name: "双腿关节训练", formerName: "下肢关节居家训练", stageRest: 60,
       items: [
-        hold({ name: "双侧屈膝抗阻静力训练", short: "屈膝抗阻", equipment: "弹力带 10 到 15 磅", tools: ["弹力带 10–15 磅"], art: "kneeres", rest: 7 }),
-        hold({ name: "双侧屈膝屈髋维持训练", short: "屈膝屈髋", equipment: "", tools: [], art: "table", rest: 7 }),
-        hold({ name: "双髋外展抗阻静力训练", short: "髋外展", equipment: "20 磅弹力环", tools: ["20 磅弹力环"], art: "abd", rest: 7 }),
-        hold({ name: "双髋内收抗阻静力训练", short: "髋内收", equipment: "仰卧内收腿夹球，球径 20 到 25 厘米", tools: ["夹球 20–25 厘米"], art: "ball", rest: 7 }),
-        { type: "manual", name: "双侧抬腿跨障碍", short: "抬腿跨障碍", equipment: "", tools: [], art: "step", sets: 2, reps: "8–10" }
+        hold({ name: "双侧屈膝抗阻静力训练", short: "屈膝抗阻", equipment: "弹力带 10 到 15 磅", tools: ["弹力带 10–15 磅"], art: "kneeres", image: "images/kneeres.jpg", rest: 7 }),
+        hold({ name: "双侧屈膝屈髋维持训练", short: "屈膝屈髋", equipment: "", tools: [], art: "table", image: "images/table.jpg", rest: 7 }),
+        hold({ name: "双髋外展抗阻静力训练", short: "髋外展", equipment: "20 磅弹力环", tools: ["20 磅弹力环"], art: "abd", image: "images/abd.jpg", rest: 7 }),
+        hold({ name: "双髋内收抗阻静力训练", short: "髋内收", equipment: "仰卧内收腿夹球，球径 20 到 25 厘米", tools: ["夹球 20–25 厘米"], art: "ball", image: "images/ball.jpg", rest: 7 }),
+        { type: "manual", name: "双侧抬腿跨障碍", short: "抬腿跨障碍", equipment: "", tools: [], art: "step", image: "images/step.jpg", sets: 2, reps: "8–10" }
       ]
     }
   });

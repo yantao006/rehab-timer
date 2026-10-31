@@ -77,6 +77,8 @@ svg { display: block; }
 .pics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .pics span { background: var(--tile); border-radius: 10px; padding: 6px 4px; display: grid; place-items: center; }
 .pics svg { width: 100%; max-width: 52px; height: 30px; color: var(--ink); }
+.pics span.photo { padding: 0; overflow: hidden; }
+.pics img { display: block; width: 100%; height: 42px; object-fit: cover; }
 .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .card-foot .muted { font-size: .85rem; }
 .resume-line { background: var(--signal-soft); border-radius: 12px; padding: 8px 10px; font-size: .88rem; }
@@ -90,9 +92,10 @@ svg { display: block; }
 .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: .85rem; }
 .chip.tool { border-color: var(--signal-line); background: var(--signal-soft); }
 .item-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
-.item-list li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.item-list li { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .item-list li:last-child { border-bottom: 0; }
-.item-list svg { width: 56px; height: 35px; color: var(--ink); }
+.item-list svg { width: 56px; height: 35px; color: var(--ink); justify-self: center; }
+.item-list img { display: block; width: 72px; height: 41px; object-fit: cover; border-radius: 8px; }
 .item-list b { display: block; font-size: .95rem; line-height: 1.35; font-weight: 650; }
 .item-list small { display: block; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 .segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: var(--seg); border-radius: 12px; padding: 4px; }
@@ -121,6 +124,7 @@ svg { display: block; }
 .train-top p { text-align: center; font-size: .95rem; opacity: .92; }
 .train-mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; min-height: 0; padding: 12px 0; }
 .train-art { width: 120px; height: 75px; color: #fff; opacity: .92; margin-bottom: 6px; }
+.train-photo { display: block; width: min(250px, 58vw); aspect-ratio: 16 / 9; object-fit: cover; border-radius: 16px; margin-bottom: 8px; box-shadow: 0 8px 22px -12px rgba(0,0,0,.6); }
 .phase { font-size: clamp(2rem, 9vw, 3rem); font-weight: 700; letter-spacing: .06em; line-height: 1.2; }
 .count { font-family: var(--digits); font-weight: 700; font-size: clamp(9rem, 46vw, 15rem); line-height: 1; margin: .04em 0 -.08em; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .count.clock { font-size: clamp(6.5rem, 32vw, 11rem); }
@@ -146,6 +150,8 @@ svg { display: block; }
 .done-line svg { width: 20px; height: 20px; }
 .art-box { background: var(--card); border: 1px solid var(--line); border-radius: 22px; display: grid; place-items: center; padding: 22px 0; }
 .art-box svg { width: min(260px, 70%); height: auto; aspect-ratio: 64 / 40; color: var(--ink); }
+.art-box.photo { padding: 0; overflow: hidden; }
+.art-box img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
 .item-name { font-size: 1.45rem; font-weight: 700; line-height: 1.35; }
 
 /* done */
@@ -197,7 +203,7 @@ svg { display: block; }
 <body>
   <svg width="0" height="0" class="sprite" aria-hidden="true" focusable="false">
     <defs>
-      <!-- Exercise pictograms (placeholder line art, 64x40). Postures pending confirmation against the therapist's photos. -->
+      <!-- Exercise pictograms (line art, 64x40). Plan B items use images/*.jpg drawn from the user's photos instead; plan A line art awaits photos. -->
       <symbol id="art-hipext" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34L57 33"/><path d="M34 31L46 25L45 12.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><rect x="41.5" y="6.5" width="7" height="5.5" rx="1.3" fill="#f36a32"/></symbol>
       <symbol id="art-slr" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 22L51 34.5"/><path d="M34 31L56 16.5"/><path d="M17 31L13.5 35"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><rect x="52" y="11.5" width="7" height="5.5" rx="1.3" transform="rotate(-33 55.5 14.25)" fill="#f36a32"/></symbol>
       <symbol id="art-hipadd" viewBox="0 0 64 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 36.5H61" stroke-width="1.5" opacity=".35"/><path d="M13 31H34"/><path d="M34 31L43 18L51 34.5"/><path d="M17 31L13.5 35"/><path d="M60.5 12V25" stroke-width="2.4"/></g><circle cx="8.5" cy="29.5" r="3.8" fill="currentColor"/><path d="M43.5 18.5L60.5 18.5" stroke="#f36a32" stroke-width="2.6" stroke-linecap="round"/></symbol>
@@ -258,6 +264,7 @@ svg { display: block; }
         <div class="train-top"><button class="icon-button" id="runExit" type="button" aria-label="暂停并结束训练"><svg><use href="#i-close"/></svg></button><p id="runPlace"></p><button class="icon-button" id="runSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
         <div class="train-mid">
           <svg class="train-art" id="runArt" aria-hidden="true"><use href="#art-hipext"/></svg>
+          <img class="train-photo" id="runImg" alt="" hidden>
           <p class="phase" id="runPhase"></p>
           <p class="count" id="runCount" aria-hidden="true"></p>
           <p class="train-sub" id="runSub"></p>
@@ -278,6 +285,7 @@ svg { display: block; }
         <div class="train-mid">
           <div class="pause-mark" id="holdMark" aria-hidden="true"><svg><use href="#i-pause"/></svg></div>
           <svg class="train-art" id="holdArt" aria-hidden="true" hidden><use href="#art-step"/></svg>
+          <img class="train-photo" id="holdImg" alt="" hidden>
           <p class="phase" id="holdPhase"></p>
           <p class="count small-count" id="holdCount" hidden></p>
           <p class="train-sub" id="holdSub"></p>
@@ -298,7 +306,7 @@ svg { display: block; }
         <div class="bar"><button class="icon-button" id="betweenExit" type="button" aria-label="结束训练"><svg><use href="#i-close"/></svg></button><p class="muted" id="betweenPlace"></p><button class="icon-button" id="betweenSound" type="button" aria-pressed="true" aria-label="声音"><svg><use href="#i-sound"/></svg></button></div>
         <p class="done-line" id="betweenDone"><svg aria-hidden="true"><use href="#i-check"/></svg><span></span></p>
         <h2 class="label">下一项</h2>
-        <div class="art-box"><svg id="betweenArt" aria-hidden="true"><use href="#art-slr"/></svg></div>
+        <div class="art-box" id="betweenBox"><svg id="betweenArt" aria-hidden="true"><use href="#art-slr"/></svg><img id="betweenImg" alt="" hidden></div>
         <p class="item-name" id="betweenName"></p>
         <div class="chips" id="betweenChips"></div>
         <p class="hint" id="betweenRest"></p>
@@ -378,6 +386,7 @@ globalThis.RehabCore = (() => {
   const hold = extra => ({ type: "hold", hold: 15, reps: 6, sets: 2, ...extra });
 
   // Training facts are authoritative in PRODUCT.md. Names, equipment and doses must not drift.
+  // `art` is the line-art symbol in template.html; `image` (when present) is the illustration drawn from the user's photos.
   const PLANS = freeze({
     [PLAN_A]: {
       id: PLAN_A, letter: "a", name: "左腿抗阻训练", formerName: "原计划", stageRest: 0,
@@ -392,11 +401,11 @@ globalThis.RehabCore = (() => {
     [PLAN_B]: {
       id: PLAN_B, letter: "b", name: "双腿关节训练", formerName: "下肢关节居家训练", stageRest: 60,
       items: [
-        hold({ name: "双侧屈膝抗阻静力训练", short: "屈膝抗阻", equipment: "弹力带 10 到 15 磅", tools: ["弹力带 10–15 磅"], art: "kneeres", rest: 7 }),
-        hold({ name: "双侧屈膝屈髋维持训练", short: "屈膝屈髋", equipment: "", tools: [], art: "table", rest: 7 }),
-        hold({ name: "双髋外展抗阻静力训练", short: "髋外展", equipment: "20 磅弹力环", tools: ["20 磅弹力环"], art: "abd", rest: 7 }),
-        hold({ name: "双髋内收抗阻静力训练", short: "髋内收", equipment: "仰卧内收腿夹球，球径 20 到 25 厘米", tools: ["夹球 20–25 厘米"], art: "ball", rest: 7 }),
-        { type: "manual", name: "双侧抬腿跨障碍", short: "抬腿跨障碍", equipment: "", tools: [], art: "step", sets: 2, reps: "8–10" }
+        hold({ name: "双侧屈膝抗阻静力训练", short: "屈膝抗阻", equipment: "弹力带 10 到 15 磅", tools: ["弹力带 10–15 磅"], art: "kneeres", image: "images/kneeres.jpg", rest: 7 }),
+        hold({ name: "双侧屈膝屈髋维持训练", short: "屈膝屈髋", equipment: "", tools: [], art: "table", image: "images/table.jpg", rest: 7 }),
+        hold({ name: "双髋外展抗阻静力训练", short: "髋外展", equipment: "20 磅弹力环", tools: ["20 磅弹力环"], art: "abd", image: "images/abd.jpg", rest: 7 }),
+        hold({ name: "双髋内收抗阻静力训练", short: "髋内收", equipment: "仰卧内收腿夹球，球径 20 到 25 厘米", tools: ["夹球 20–25 厘米"], art: "ball", image: "images/ball.jpg", rest: 7 }),
+        { type: "manual", name: "双侧抬腿跨障碍", short: "抬腿跨障碍", equipment: "", tools: [], art: "step", image: "images/step.jpg", sets: 2, reps: "8–10" }
       ]
     }
   });
@@ -1155,6 +1164,15 @@ globalThis.RehabStore = (() => {
   const setText = (el, value) => { if (el.textContent !== value) el.textContent = value; };
   const show = (el, visible) => { if (el.hasAttribute("hidden") === visible) el.toggleAttribute("hidden", !visible); }; // SVG has no .hidden property
   const useArt = (svg, art) => { const use = svg.querySelector("use"); const ref = `#art-${art}`; if (use.getAttribute("href") !== ref) use.setAttribute("href", ref); };
+  // Illustrated items show their picture; the rest keep the line-art symbol.
+  function setArt(svg, img, item) {
+    if (item.image) {
+      show(svg, false);
+      if (img.getAttribute("src") !== item.image) { img.setAttribute("src", item.image); img.alt = `${item.name}示意图`; }
+      show(img, true);
+    } else { show(img, false); show(svg, true); useArt(svg, item.art); }
+  }
+  const artHtml = item => item.image ? `<img src="${item.image}" alt="" loading="lazy" decoding="async">` : `<svg aria-hidden="true"><use href="#art-${item.art}"/></svg>`;
   const planName = id => Core.PLANS[id].name;
   const today = () => new Date();
   const todayKey = () => Core.localDate(today());
@@ -1363,7 +1381,7 @@ globalThis.RehabStore = (() => {
     meta.textContent = `约 ${minutes(planId)} 分钟${plan.items.some(i => i.type === "manual") ? " + 1 项不计时" : ""}`;
     top.append(name, meta);
     const pics = document.createElement("div"); pics.className = "pics"; pics.setAttribute("aria-hidden", "true");
-    for (const item of plan.items) pics.insertAdjacentHTML("beforeend", `<span><svg><use href="#art-${item.art}"/></svg></span>`);
+    for (const item of plan.items) pics.insertAdjacentHTML("beforeend", `<span${item.image ? ' class="photo"' : ""}>${artHtml(item)}</span>`);
     const foot = document.createElement("div"); foot.className = "card-foot";
     const actions = document.createElement("div"); actions.className = "card-actions";
     if (session) {
@@ -1412,7 +1430,7 @@ globalThis.RehabStore = (() => {
     $("prepTools").replaceChildren(...(tools.length ? tools : ["不需要额外器材"]).map(text => { const c = document.createElement("span"); c.className = tools.length ? "chip tool" : "chip"; c.textContent = text; return c; }));
     $("prepItems").replaceChildren(...plan.items.map(item => {
       const li = document.createElement("li");
-      li.insertAdjacentHTML("beforeend", `<svg aria-hidden="true"><use href="#art-${item.art}"/></svg>`);
+      li.insertAdjacentHTML("beforeend", artHtml(item));
       const text = document.createElement("div");
       const b = document.createElement("b"); b.textContent = item.name;
       const dose = document.createElement("small"); dose.textContent = `${Core.itemDose(item)}${item.type === "hold" ? `，每次间休息 ${item.rest} 秒` : item.type === "rounds" ? `，前三轮后各休息 ${item.roundRest} 秒` : ""}`;
@@ -1477,7 +1495,7 @@ globalThis.RehabStore = (() => {
     if (!s || s.state !== "running") return;
     const item = s.current, place = s.where(t);
     setText($("runPlace"), `${s.item + 1} / ${s.items.length} · ${item.short}`);
-    useArt($("runArt"), item.art);
+    setArt($("runArt"), $("runImg"), item);
     const segment = place.segment;
     if (!segment) return;
     let phase, sub, waterClass, fraction;
@@ -1557,7 +1575,7 @@ globalThis.RehabStore = (() => {
     show($("holdCount"), false); show($("holdDots"), false);
     note($("holdNotice"), ui.holdNotice);
     if (s.state === "paused") {
-      show($("holdMark"), true); show($("holdArt"), false);
+      show($("holdMark"), true); show($("holdArt"), false); show($("holdImg"), false);
       setText($("holdPhase"), "已暂停");
       const segment = Core.segmentAt(s.compiled(), s.at);
       setText($("holdSub"), segment ? `${Core.describePlace(s.plan, s.item, s.at, s.groupRest)}${segment.rep ? ` · 第 ${segment.rep} 次` : ""}` : "");
@@ -1568,7 +1586,7 @@ globalThis.RehabStore = (() => {
       show(secondary, true); setText(secondary, ui.offerSilent ? "静音继续" : "结束训练");
       return;
     }
-    show($("holdMark"), false); show($("holdArt"), true); useArt($("holdArt"), item.art);
+    show($("holdMark"), false); setArt($("holdArt"), $("holdImg"), item);
     if (s.state === "manual") {
       setText($("holdPhase"), `第 ${s.set} 组`);
       show($("holdCount"), true); setText($("holdCount"), item.reps);
@@ -1611,7 +1629,8 @@ globalThis.RehabStore = (() => {
     const item = s.current;
     setText($("betweenPlace"), `${s.item + 1} / ${s.items.length}`);
     setText($("betweenDone").querySelector("span"), `第 ${s.item} 项完成`);
-    useArt($("betweenArt"), item.art);
+    setArt($("betweenArt"), $("betweenImg"), item);
+    $("betweenBox").classList.toggle("photo", Boolean(item.image));
     setText($("betweenName"), item.name);
     $("betweenChips").replaceChildren(...[...item.tools.map(t => ["chip tool", t]), ["chip", Core.itemDose(item)]].map(([cls, text]) => { const c = document.createElement("span"); c.className = cls; c.textContent = text; return c; }));
     setText($("betweenRest"), [item.equipment && item.equipment !== item.tools[0] ? `器材：${item.equipment}` : "", Core.itemRestNote(item, s.groupRest)].filter(Boolean).join(" · "));
