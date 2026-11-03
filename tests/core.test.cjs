@@ -68,17 +68,29 @@ test('就位倒数只在第 2–5 项开头，不计入剂量，可以跳过', (
   });
 });
 
-test('口令时序：放松在边界那一刻之后才开口；保持段除了三二一没有其他语音；口令互不重叠', () => {
+// Every adjustable value on its own, plus the shortest and the longest combinations.
+function sweep(plan) {
+  const configs = [{}];
+  for (const key of C.fieldKeys(plan)) for (const value of C.FIELDS[key].values) configs.push({ [key]: value });
+  configs.push(Object.fromEntries(C.fieldKeys(plan).map(key => [key, C.FIELDS[key].values[0]])));
+  configs.push(Object.fromEntries(C.fieldKeys(plan).map(key => [key, C.FIELDS[key].values.at(-1)])));
+  configs.push({ sets: 4, reps: 10, hold: 5, repRest: 4, groupRest: 20, stageRest: 20, rounds: 6, work: 10, stretch: 10, roundRest: 20 });
+  return configs;
+}
+
+function checkTiming(plan, config) {
   const dur = e => e.voice ? seconds(e.voice) : C.TONE_SECONDS[e.tone];
-  for (const plan of [A, B]) for (const rest of C.GROUP_REST_OPTIONS) C.PLANS[plan].items.forEach((item, i) => {
-    const c = C.compile(plan, i, rest);
+  const label = `${plan} ${JSON.stringify(config)}`;
+  C.PLANS[plan].items.forEach((item, i) => {
+    const c = C.compile(plan, i, config);
     if (c.manual) return;
     const voices = c.events.filter(e => e.voice);
-    for (let k = 1; k < voices.length; k++) assert.ok(voices[k].at >= voices[k - 1].at + dur(voices[k - 1]) - 1e-9, `${plan}/${i} ${voices[k - 1].voice} overlaps ${voices[k].voice}`);
+    for (const e of voices) assert.ok(voice.clips[e.voice], `${label}: missing clip ${e.voice}`);
+    for (let k = 1; k < voices.length; k++) assert.ok(voices[k].at >= voices[k - 1].at + dur(voices[k - 1]) - 1e-9, `${label}/${i} ${voices[k - 1].voice} overlaps ${voices[k].voice}`);
     for (const seg of c.segments) {
       if (!C.WORK_KINDS.has(seg.kind)) continue;
       const inside = voices.filter(e => e.at > seg.start + 1.2 && e.at < seg.end);
-      assert.deepEqual(plain(inside.map(e => e.voice)), ['n3', 'n2', 'n1'], `${plan}/${i} work at ${seg.start}`);
+      assert.deepEqual(plain(inside.map(e => e.voice)), ['n3', 'n2', 'n1'], `${label}/${i} work at ${seg.start}`);
       assert.ok(inside.every(e => e.at + dur(e) <= seg.end + 1e-9), 'countdown finishes inside the hold');
       assert.ok(c.events.some(e => e.tone === 'rise' && Math.abs(e.at - seg.start) < 1e-9), 'rising tone marks the start');
     }
@@ -89,12 +101,30 @@ test('口令时序：放松在边界那一刻之后才开口；保持段除了�
     }
     for (const seg of c.segments.filter(s => s.kind === 'rest')) {
       const next = voices.find(e => e.at >= seg.start + 0.4 && e.at < seg.end && e.voice.startsWith('rep-'));
-      assert.ok(next && next.at + dur(next) <= seg.end - 1, `${plan}/${i} rep cue ends at least 1 s before work`);
+      assert.ok(next && next.at + dur(next) <= seg.end - 1, `${label}/${i} rep cue ends at least 1 s before work`);
+    }
+    for (const seg of c.segments.filter(s => s.kind === 'group-rest' || s.kind === 'round-rest')) {
+      const ahead = voices.find(e => e.voice.startsWith('in10-') && Math.abs(e.at - (seg.end - 10)) < 1e-9);
+      assert.ok(ahead, `${label}/${i} ten-second warning`);
+      const spoken = voices.filter(e => e.at > seg.start && e.at < seg.end - 10);
+      assert.ok(spoken.length && spoken.at(-1).at + dur(spoken.at(-1)) <= seg.end - 10, `${label}/${i} rest cue ends before the warning`);
     }
     const opener = c.segments[0];
     const intro = voices.find(e => e.voice.startsWith('intro-'));
-    assert.ok(intro.at + dur(intro) <= opener.end - 3, `${plan}/${i} intro ends before the 3-2-1 ticks`);
+    assert.ok(intro.at + dur(intro) <= opener.end - 3, `${label}/${i} intro ends before the 3-2-1 ticks`);
   });
+}
+
+test('口令时序：放松在边界那一刻之后才开口；保持段除了三二一没有其他语音；口令互不重叠', () => {
+  for (const plan of [A, B]) for (const rest of C.REST_OPTIONS) checkTiming(plan, rest);
+});
+
+test('每个可调数值在整个范围内口令都排得下：互不重叠、素材齐全、休息时长如实报出', () => {
+  for (const plan of [A, B]) for (const config of sweep(plan)) checkTiming(plan, config);
+  const c = C.compile(B, 0, { groupRest: 90, stageRest: 150 });
+  const spoken = c.events.filter(e => e.voice).map(e => e.voice);
+  assert.ok(spoken.includes('set-done-1') && spoken.includes('rest-90'));
+  assert.ok(spoken.includes('stage-done') && spoken.includes('rest-150'));
 });
 
 test('暂停后，保持段从这一次开头重来；休息从暂停处继续；只有准备、就位、组休、轮休能跳过', () => {
@@ -177,23 +207,107 @@ test('下肢计划第 5 项：两组都要明确开始，连点不会一次完�
 });
 
 test('快照和恢复：恢复永远不消耗离线时间，只回到暂停或换项', () => {
-  const s = new C.Session({ plan: A, id: ID, groupRest: 120 });
+  const s = new C.Session({ plan: A, id: ID, config: { groupRest: 120 } });
   const track = s.begin();
   s.advance(track.lead + 30 + 15 + 5 + 7.5); // second hold, half way
   const snap = plain(s.snapshot());
   assert.equal(snap.state, 'paused');
   assert.equal(snap.at, 50, 'saved at the start of the interrupted hold');
-  assert.equal(snap.groupRest, 120);
+  assert.equal(snap.version, 4);
+  assert.equal(snap.config.groupRest, 120);
   const restored = C.Session.restore(snap);
-  assert.equal(restored.state, 'paused'); assert.equal(restored.at, 50); assert.equal(restored.groupRest, 120);
-  assert.equal(C.Session.restore({ ...snap, groupRest: 45 }), null);
+  assert.equal(restored.state, 'paused'); assert.equal(restored.at, 50); assert.equal(restored.config.groupRest, 120);
+  assert.equal(C.Session.restore({ ...snap, config: { ...snap.config, groupRest: 45.5 } }), null);
+  assert.equal(C.Session.restore({ ...snap, config: { ...snap.config, reps: 99 } }), null);
+  assert.equal(C.Session.restore({ ...snap, config: null }), null);
   assert.equal(C.Session.restore({ ...snap, at: 99999 }), null);
   assert.equal(C.Session.restore({ ...snap, state: 'running' }), null);
   assert.equal(C.Session.restore({ ...snap, version: 2 }), null);
-  const manual = C.Session.restore({ version: 3, plan: B, groupRest: 60, id: ID, item: 4, at: 0, state: 'manual', set: 2 });
+  const manual = C.Session.restore({ version: 4, plan: B, config: C.defaults(B), id: ID, item: 4, at: 0, state: 'manual', set: 2 });
   assert.equal(manual.state, 'manual-ready', '刷新后第 2 组要重新明确开始');
-  const manualFirst = C.Session.restore({ version: 3, plan: B, groupRest: 60, id: ID, item: 4, at: 0, state: 'manual', set: 1 });
+  const manualFirst = C.Session.restore({ version: 4, plan: B, config: C.defaults(B), id: ID, item: 4, at: 0, state: 'manual', set: 1 });
   assert.equal(manualFirst.state, 'between');
+});
+
+test('上一版本留下的进度（只记了组间休息）仍能恢复，其余参数取默认', () => {
+  const old = { version: 3, plan: A, groupRest: 90, id: ID, item: 1, at: 40, state: 'paused', set: 1 };
+  const restored = C.Session.restore(old);
+  assert.equal(restored.state, 'paused'); assert.equal(restored.at, 40);
+  assert.deepEqual(plain(restored.config), { ...plain(C.defaults(A)), groupRest: 90 });
+  assert.equal(C.Session.restore({ ...old, groupRest: 45.5 }), null);
+  const manual = C.Session.restore({ version: 3, plan: B, groupRest: 60, id: ID, item: 4, at: 0, state: 'manual', set: 2 });
+  assert.equal(manual.state, 'manual-ready');
+});
+
+test('参数可调，默认值不变：组数、次数、保持、三种休息都按设置展开，剂量随之变化', () => {
+  assert.deepEqual(plain(C.defaults(A)), { sets: 2, reps: 6, hold: 15, repRest: 5, groupRest: 60, stageRest: 0, rounds: 4, work: 30, stretch: 30, roundRest: 30 });
+  assert.deepEqual(plain(C.defaults(B)), { sets: 2, reps: 6, hold: 15, repRest: 7, groupRest: 60, stageRest: 60 });
+  assert.equal(C.doseSeconds(A, {}), 1520); assert.equal(C.doseSeconds(A), 1520);
+  assert.equal(C.doseSegments(A, C.defaults(A)), 104); assert.equal(C.doseSegments(B), 99);
+  const config = { sets: 3, reps: 4, hold: 20, repRest: 6, groupRest: 45, stageRest: 30 };
+  const segs = plain(C.compile(B, 0, config).segments);
+  assert.equal(segs.filter(s => s.kind === 'work').length, 12);
+  assert.ok(segs.filter(s => s.kind === 'work').every(s => s.seconds === 20));
+  assert.equal(segs.filter(s => s.kind === 'rest').length, 9);
+  assert.ok(segs.filter(s => s.kind === 'rest').every(s => s.seconds === 6));
+  assert.deepEqual(segs.filter(s => s.kind === 'group-rest').map(s => s.seconds), [45, 45]);
+  assert.deepEqual(segs.filter(s => s.kind === 'stage-rest').map(s => s.seconds), [30]);
+  assert.equal(segs.filter(s => s.kind === 'work').at(-1).rep, 4);
+  // First item: prep 30 s, 12 holds of 20 s, 9 short rests of 6 s, two group rests of 45 s, stage rest 30 s.
+  assert.equal(C.compile(B, 0, config).end, 30 + 240 + 54 + 90 + 30);
+    // Plan A: stage rest between items, and the fifth item takes its own numbers.
+  const a = plain(C.compile(A, 1, { stageRest: 90 }).segments);
+  assert.deepEqual(a.filter(s => s.kind === 'stage-rest').map(s => s.seconds), [90]);
+  const calf = plain(C.compile(A, 4, { rounds: 3, work: 20, stretch: 45, roundRest: 60 }).segments);
+  assert.deepEqual(calf.filter(s => s.kind === 'tiptoe').map(s => s.seconds), [20, 20, 20]);
+  assert.deepEqual(calf.filter(s => s.kind === 'stretch').map(s => s.seconds), [45, 45, 45]);
+  assert.deepEqual(calf.filter(s => s.kind === 'round-rest').map(s => s.seconds), [60, 60]);
+  // One set means no group rest; one rep means no rest between reps.
+  const single = plain(C.compile(A, 0, { sets: 1, reps: 1 }).segments);
+  assert.deepEqual(single.map(s => s.kind), ['prep', 'work']);
+});
+
+test('无效或过长的设置回到默认；单项最长 25 分钟；步进只给出可用的值', () => {
+  assert.deepEqual(plain(C.normalize(A, { sets: 9, reps: 'x', hold: 17, bogus: 1 })), plain(C.defaults(A)));
+  assert.equal(C.normalize(A, { sets: 3 }).sets, 3);
+  assert.equal(C.normalize(A, 150).groupRest, 150);
+  const huge = { sets: 4, reps: 10, hold: 60, repRest: 20, groupRest: 180 };
+  assert.deepEqual(plain(C.normalize(A, huge)), plain(C.defaults(A)), '超过上限的组合不被接受');
+  assert.ok(C.compile(A, 0, huge).duration > C.MAX_ITEM_SECONDS);
+  const longest = cfg => Math.max(...A_ITEMS.map(i => C.compile(A, i, cfg).duration));
+  const A_ITEMS = [0, 1, 2, 3, 4];
+  const full = { ...C.defaults(A), ...huge };
+  for (const key of C.fieldKeys(A)) for (const value of C.choices(A, huge, key)) {
+    if (value !== full[key]) assert.ok(longest({ ...full, [key]: value }) <= C.MAX_ITEM_SECONDS, `${key}=${value}`);
+  }
+  assert.ok(C.choices(A, {}, 'hold').includes(60), '默认组数下保持 60 秒仍可选');
+  assert.deepEqual(plain(C.changedKeys(A, { sets: 3, reps: 6 })), ['sets']);
+  assert.deepEqual(plain(C.changedKeys(B, {})), []);
+  assert.deepEqual(plain(C.fieldKeys(B)), ['sets', 'reps', 'hold', 'repRest', 'groupRest', 'stageRest']);
+});
+
+test('下肢计划第 5 项按设置的组数逐组开始，最后一组完成才记录', () => {
+  const s = new C.Session({ plan: B, id: ID, config: { sets: 3 }, item: 4, state: 'between' });
+  assert.equal(s.current.sets, 3);
+  s.begin();
+  assert.equal(s.completeManualSet(), 'manual-ready'); assert.equal(s.set, 2);
+  assert.equal(s.completeManualSet(), null);
+  assert.ok(plain(s.begin()).events.some(e => e.voice === 'manual-2'));
+  assert.equal(s.completeManualSet(), 'manual-ready'); assert.equal(s.set, 3);
+  assert.ok(plain(s.begin()).events.some(e => e.voice === 'manual-3'));
+  assert.equal(s.completeManualSet(new Date(2026, 9, 31, 8)), 'finished');
+  const one = new C.Session({ plan: B, id: ID, config: { sets: 1 }, item: 4, state: 'between' });
+  one.begin();
+  assert.equal(one.completeManualSet(new Date(2026, 9, 31, 8)), 'finished');
+  const restored = C.Session.restore({ version: 4, plan: B, config: { ...C.defaults(B), sets: 3 }, id: ID, item: 4, at: 0, state: 'manual-ready', set: 3 });
+  assert.equal(restored.state, 'manual-ready'); assert.equal(restored.set, 3);
+});
+
+test('音轨标识区分不同设置、不同组：同样长度的音轨不会被误当成同一条', () => {
+  const x = C.buildTrack(C.compile(A, 0, { sets: 2, reps: 6 }), 0, 'start');
+  const y = C.buildTrack(C.compile(A, 0, { sets: 3, reps: 4 }), 0, 'start');
+  assert.notEqual(x.key, y.key);
+  assert.notEqual(C.manualTrack(B, 4, 2, false).key, C.manualTrack(B, 4, 3, false).key);
 });
 
 test('跳过休息只在允许的段落生效，并换成从下一组开始的音轨', () => {
@@ -227,4 +341,9 @@ test('语音清单与素材一致：每个口令都有录音，且不过长', ()
   assert.equal(wav.readUInt32LE(24), voice.rate);
   const lastClip = Math.max(...Object.values(voice.clips).map(([o, d]) => o + d));
   assert.ok((wav.length - 44) / 2 / voice.rate * 1000 >= lastClip, 'sprite covers every clip');
+  assert.equal(voice.samples, (wav.length - 44) / 2, '清单记录的采样数与 WAV 一致，页面用它核对压缩副本');
+  const compact = fs.readFileSync(path.join(__dirname, '../audio', voice.compact.file));
+  assert.equal(compact.length, voice.compact.bytes);
+  assert.equal(compact.toString('ascii', 4, 8), 'ftyp', 'AAC 副本是 MP4 容器');
+  assert.ok(compact.length < wav.length / 4, '压缩副本明显更小');
 });

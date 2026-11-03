@@ -30,9 +30,10 @@ if (process.argv.includes('--publish')) {
   await mkdir(path.join(out, 'audio'), { recursive: true });
   await writeFile(path.join(out, 'index.html'), html);
   await copyFile(path.join(root, 'audio/voice.wav'), path.join(out, 'audio/voice.wav'));
+  await copyFile(path.join(root, 'audio/voice.m4a'), path.join(out, 'audio/voice.m4a'));
   await cp(path.join(root, 'images'), path.join(out, 'images'), { recursive: true, filter: source => !source.endsWith('.md') });
   await writeFile(path.join(out, '_routes.json'), JSON.stringify({ version: 1, include: ['/api/*'], exclude: [] }, null, 2) + '\n');
-  // The voice sprite is versioned by query string, so it can be cached for a long time.
-  await writeFile(path.join(out, '_headers'), '/audio/voice.wav\n  Cache-Control: public, max-age=31536000, immutable\n/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n');
+  // The voice files are versioned by query string, so they can be cached for a long time.
+  await writeFile(path.join(out, '_headers'), '/audio/voice.wav\n  Cache-Control: public, max-age=31536000, immutable\n/audio/voice.m4a\n  Cache-Control: public, max-age=31536000, immutable\n/\n  Cache-Control: no-cache\n/index.html\n  Cache-Control: no-cache\n');
 }
 console.log(process.argv.includes('--check') ? 'Build output matches source.' : 'Built index.html from src/.');

@@ -60,11 +60,17 @@
         <h2 class="label">先准备好这些</h2>
         <div class="chips" id="prepTools"></div>
         <ol class="item-list" id="prepItems"></ol>
-        <h2 class="label" id="restLabel">组间休息</h2>
-        <div class="segmented" id="restOptions" role="radiogroup" aria-labelledby="restLabel"></div>
-        <p class="hint" id="restHint">只用于前四项的两组之间，可以跳过。</p>
+        <h2 class="label" id="paramsLabel">训练参数</h2>
+        <details class="params" id="prepParams">
+          <summary><span id="paramsSummary"></span><span class="params-open" aria-hidden="true">调整</span></summary>
+          <div class="param-rows" id="paramRows"></div>
+          <p class="hint" id="paramsHint"></p>
+          <p class="notice" id="paramsCap" role="status" hidden></p>
+          <button class="link-button" id="paramsReset" type="button" hidden>恢复默认</button>
+        </details>
         <div class="sound-row"><button class="toggle" id="prepSound" type="button" aria-pressed="true">声音：开</button><button class="link-button" id="prepTest" type="button">试听</button></div>
         <p class="notice" id="prepNotice" role="status" hidden></p>
+        <button class="link-button" id="prepVoiceAction" type="button" hidden></button>
       </div>
       <div class="dock"><button class="primary" id="prepStart" type="button">开始训练</button></div>
     </section>
@@ -80,8 +86,7 @@
           <p class="phase" id="runPhase"></p>
           <p class="count" id="runCount" aria-hidden="true"></p>
           <p class="train-sub" id="runSub"></p>
-          <div class="dots" id="runDots" aria-hidden="true"></div>
-          <div class="dots dim" id="runDots2" aria-hidden="true"></div>
+          <div class="dot-stack" id="runDots" aria-hidden="true"></div>
         </div>
         <div class="train-bottom">
           <button class="pill" id="runSkip" type="button" hidden>跳过休息</button>
@@ -123,6 +128,7 @@
         <div class="chips" id="betweenChips"></div>
         <p class="hint" id="betweenRest"></p>
         <p class="notice" id="betweenNotice" role="status" hidden></p>
+        <button class="link-button" id="betweenVoiceAction" type="button" hidden></button>
       </div>
       <div class="dock"><button class="primary" id="betweenStart" type="button">准备好了，开始</button><p class="hint center" id="betweenHint">点击后有 10 秒就位倒数</p></div>
     </section>

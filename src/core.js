@@ -4,14 +4,34 @@ globalThis.RehabCore = (() => {
   "use strict";
   const PLAN_A = "five-stage-v1";
   const PLAN_B = "lower-limb-joints-v1";
-  const GROUP_REST_OPTIONS = Object.freeze([60, 90, 120, 150]);
-  const GROUP_REST_LABELS = Object.freeze({ 60: "60 秒", 90: "1 分半", 120: "2 分钟", 150: "2 分半" });
+  // Spoken rest lengths: every value here has a "休息…" clip, so cues always say the real duration.
+  const REST_OPTIONS = Object.freeze([20, 30, 45, 60, 90, 120, 150, 180]);
+  const REST_LABELS = Object.freeze({ 0: "不休息", 20: "20 秒", 30: "30 秒", 45: "45 秒", 60: "60 秒", 90: "1 分半", 120: "2 分钟", 150: "2 分半", 180: "3 分钟" });
+  const MAX_SETS = 4, MAX_REPS = 10, MAX_ROUNDS = 6;
+  const MAX_ITEM_SECONDS = 1500; // one rendered track stays near 65 MB at most, which a phone can hold
+  const range = (from, to, step = 1) => Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
+  const unitLabel = unit => value => `${value} ${unit}`;
+  // Adjustable before a session starts. `values` is the list a stepper walks through; the smallest
+  // values are the shortest the voice schedule can fit without overlap (tests sweep every one).
+  const FIELDS = Object.freeze({
+    sets: { label: "每项组数", values: range(1, MAX_SETS), format: unitLabel("组"), scope: "all" },
+    reps: { label: "每组次数", values: range(1, MAX_REPS), format: unitLabel("次"), scope: "hold" },
+    hold: { label: "每次保持", values: range(5, 60, 5), format: unitLabel("秒"), scope: "hold" },
+    repRest: { label: "次间休息", values: range(4, 20), format: unitLabel("秒"), scope: "hold" },
+    groupRest: { label: "组间休息", values: REST_OPTIONS, format: v => REST_LABELS[v], scope: "hold" },
+    stageRest: { label: "项间休息", values: [0, ...REST_OPTIONS], format: v => REST_LABELS[v], scope: "all" },
+    rounds: { label: "踮脚拉伸轮数", values: range(1, MAX_ROUNDS), format: unitLabel("轮"), scope: "rounds" },
+    work: { label: "踮脚每轮", values: [10, 15, 20, 30, 45, 60], format: unitLabel("秒"), scope: "rounds" },
+    stretch: { label: "拉伸每轮", values: [10, 15, 20, 30, 45, 60], format: unitLabel("秒"), scope: "rounds" },
+    roundRest: { label: "轮间休息", values: REST_OPTIONS, format: v => REST_LABELS[v], scope: "rounds" }
+  });
   const PREP_SECONDS = 30;     // first item only, skippable, part of the planned total
   const SETTLE_SECONDS = 10;   // after tapping "开始" on items 2-5, skippable, not part of the dose
   const COUNT_IN = 4;          // lead-in before a resumed or skipped-to work segment
   const RESUME_LEAD = 1.2;     // lead-in before a resumed rest
   const TONE_GAP = 0.5;        // voice after a boundary tone
   const CHIME_GAP = 0.75;
+  const REST_CUE_GAP = 0.12;   // between "第一组完成" and "休息一分钟"
   const WORK_KINDS = Object.freeze(new Set(["work", "tiptoe", "stretch"]));
   const SKIPPABLE_KINDS = Object.freeze(new Set(["prep", "settle", "group-rest", "round-rest"]));
 
@@ -51,20 +71,24 @@ globalThis.RehabCore = (() => {
   const PLAN_IDS = Object.freeze([PLAN_A, PLAN_B]);
 
   // Every spoken cue. scripts/generate-voice.mjs renders these texts into audio/voice.wav.
+  // Numbered cues cover the largest adjustable counts; rest lengths are spoken as one clip each.
+  const CN = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  const REST_SPOKEN = { 20: "二十秒", 30: "三十秒", 45: "四十五秒", 60: "一分钟", 90: "一分半", 120: "两分钟", 150: "两分半", 180: "三分钟" };
+  const numbered = (from, to, make) => Object.fromEntries(range(from, to).map(n => [make.key(n), make.text(n)]));
   const VOICE_TEXT = freeze({
     start: "开始", relax: "放松", n3: "三", n2: "二", n1: "一",
-    "rep-2": "第二次", "rep-3": "第三次", "rep-4": "第四次", "rep-5": "第五次", "rep-6": "第六次",
-    "set-1": "第一组", "set-2": "第二组",
-    "round-1": "第一轮", "round-2": "第二轮", "round-3": "第三轮", "round-4": "第四轮",
+    ...numbered(2, MAX_REPS, { key: n => `rep-${n}`, text: n => `第${CN[n]}次` }),
+    ...numbered(1, MAX_SETS, { key: n => `set-${n}`, text: n => `第${CN[n]}组` }),
+    ...numbered(1, MAX_ROUNDS, { key: n => `round-${n}`, text: n => `第${CN[n]}轮` }),
     prepare: "准备",
-    "in10-set-1": "十秒后开始第一组", "in10-set-2": "十秒后开始第二组",
-    "in10-round-2": "十秒后开始第二轮", "in10-round-3": "十秒后开始第三轮", "in10-round-4": "十秒后开始第四轮",
-    "group-rest-60": "第一组完成，休息一分钟", "group-rest-90": "第一组完成，休息一分半",
-    "group-rest-120": "第一组完成，休息两分钟", "group-rest-150": "第一组完成，休息两分半",
-    "item-done": "这一项完成", "stage-rest": "这一节完成，休息一分钟", "stage-rest-end": "休息结束，准备下一项",
-    tiptoe: "踮脚", stretch: "换拉伸", "round-rest": "这一轮完成，休息三十秒",
+    ...numbered(1, MAX_SETS, { key: n => `in10-set-${n}`, text: n => `十秒后开始第${CN[n]}组` }),
+    ...numbered(1, MAX_ROUNDS, { key: n => `in10-round-${n}`, text: n => `十秒后开始第${CN[n]}轮` }),
+    ...numbered(1, MAX_SETS - 1, { key: n => `set-done-${n}`, text: n => `第${CN[n]}组完成` }),
+    ...Object.fromEntries(REST_OPTIONS.map(seconds => [`rest-${seconds}`, `休息${REST_SPOKEN[seconds]}`])),
+    "item-done": "这一项完成", "stage-done": "这一节完成", "stage-rest-end": "休息结束，准备下一项",
+    tiptoe: "踮脚", stretch: "换拉伸", "round-done": "这一轮完成",
     resume: "继续",
-    "manual-1": "第一组，做八到十次，做完点完成", "manual-2": "第二组，做八到十次，做完点完成",
+    ...numbered(1, MAX_SETS, { key: n => `manual-${n}`, text: n => `第${CN[n]}组，做八到十次，做完点完成` }),
     "all-done": "训练完成",
     test: "声音测试。能听清，就可以开始了。",
     "intro-a-0": "第一项，俯卧左大腿后伸。准备一公斤负重。",
@@ -94,23 +118,71 @@ globalThis.RehabCore = (() => {
     if (!plan) throw new Error("unknown plan");
     return plan;
   }
-  function checkRest(groupRest) {
-    if (!GROUP_REST_OPTIONS.includes(groupRest)) throw new Error("invalid group rest");
-    return groupRest;
+
+  // ---------- adjustable settings ----------
+  // A config holds the numbers the user may change before starting: it applies to every plan item of
+  // the matching type. Defaults are the plan's own numbers, so an untouched config changes nothing.
+  const defaultsCache = new Map(), itemsCache = new Map();
+  function defaults(planId) {
+    if (!defaultsCache.has(planId)) {
+      const plan = planOf(planId);
+      const holdItem = plan.items.find(item => item.type === "hold"), roundsItem = plan.items.find(item => item.type === "rounds");
+      const base = { sets: holdItem.sets, reps: holdItem.reps, hold: holdItem.hold, repRest: holdItem.rest, groupRest: 60, stageRest: plan.stageRest };
+      if (roundsItem) Object.assign(base, { rounds: roundsItem.rounds, work: roundsItem.work, stretch: roundsItem.stretch, roundRest: roundsItem.roundRest });
+      defaultsCache.set(planId, freeze(base));
+    }
+    return defaultsCache.get(planId);
   }
+  const fieldKeys = planId => Object.keys(defaults(planId));
+  const signature = config => Object.keys(config).sort().map(key => `${key}=${config[key]}`).join(",");
+  // Any input (nothing, a legacy group-rest number, or stored overrides) becomes a complete config.
+  // Unknown keys and values outside a field's list fall back to the plan default.
+  function clean(planId, input) {
+    const base = defaults(planId);
+    const patch = typeof input === "number" ? { groupRest: input } : input && typeof input === "object" ? input : {};
+    const result = {};
+    for (const key of Object.keys(base)) result[key] = FIELDS[key].values.includes(patch[key]) ? patch[key] : base[key];
+    return freeze(result);
+  }
+  function itemsFor(planId, config) {
+    const cfg = clean(planId, config), cacheKey = `${planId}:${signature(cfg)}`;
+    if (!itemsCache.has(cacheKey)) {
+      itemsCache.set(cacheKey, freeze(planOf(planId).items.map(item => {
+        if (item.type === "hold") return { ...item, sets: cfg.sets, reps: cfg.reps, hold: cfg.hold, rest: cfg.repRest };
+        if (item.type === "rounds") return { ...item, rounds: cfg.rounds, work: cfg.work, stretch: cfg.stretch, roundRest: cfg.roundRest };
+        return { ...item, sets: cfg.sets };
+      })));
+    }
+    return itemsCache.get(cacheKey);
+  }
+  // Longest timed item, in seconds, including the lead-in and spoken ending.
+  const longestItem = (planId, config) => Math.max(...planOf(planId).items.map((_, index) => compile(planId, index, config).duration));
+  const withinLimit = (planId, config) => longestItem(planId, config) <= MAX_ITEM_SECONDS;
+  // Complete, validated config. Stored values that would make an item too long fall back to defaults.
+  function normalize(planId, input) {
+    const cfg = clean(planId, input);
+    return withinLimit(planId, cfg) ? cfg : defaults(planId);
+  }
+  // The values a stepper may offer for one field, given the other settings.
+  function choices(planId, config, key) {
+    const cfg = clean(planId, config);
+    return FIELDS[key].values.filter(value => value === cfg[key] || withinLimit(planId, { ...cfg, [key]: value }));
+  }
+  const changedKeys = (planId, config) => { const cfg = clean(planId, config), base = defaults(planId); return fieldKeys(planId).filter(key => cfg[key] !== base[key]); };
 
   const compiled = new Map();
   // Expand one item into absolute segments (item seconds from 0) and the cue events laid on them.
-  function compile(planId, index, groupRest = 60) {
+  function compile(planId, index, config) {
     const plan = planOf(planId);
-    checkRest(groupRest);
-    const item = plan.items[index];
+    const cfg = clean(planId, config);
+    const item = itemsFor(planId, cfg)[index];
     if (!item) throw new Error("unknown item");
-    const cacheKey = `${planId}:${index}:${groupRest}:${globalThis.RehabVoice?.version || "est"}`;
+    const sig = signature(cfg);
+    const cacheKey = `${planId}:${index}:${sig}:${globalThis.RehabVoice?.version || "est"}`;
     if (compiled.has(cacheKey)) return compiled.get(cacheKey);
     const isLast = index === plan.items.length - 1;
     if (item.type === "manual") {
-      const result = freeze({ plan: planId, index, item, manual: true, segments: [], events: [], end: 0, duration: 0, isLast });
+      const result = freeze({ plan: planId, index, item, manual: true, segments: [], events: [], end: 0, duration: 0, isLast, sig });
       compiled.set(cacheKey, result);
       return result;
     }
@@ -126,6 +198,8 @@ globalThis.RehabCore = (() => {
     const tone = (at, name) => events.push({ at, tone: name });
     const countdownTicks = end => { for (const s of [3, 2, 1]) tone(end - s, "tick"); };
     const countdownVoice = end => { voice(end - 3, "n3"); voice(end - 2, "n2"); voice(end - 1, "n1"); };
+    // "<what finished>，休息<how long>" is two clips so any listed rest length can be spoken.
+    const restCue = (at, done, seconds) => { voice(at, done); voice(at + voiceSeconds(done) + REST_CUE_GAP, `rest-${seconds}`); };
     const intro = `intro-${plan.letter}-${index}`;
 
     if (index === 0) {
@@ -155,9 +229,9 @@ globalThis.RehabCore = (() => {
             voice(rest.end - 1.4 - voiceSeconds(next), next);
             tone(rest.end - 1, "tick");
           } else if (set < item.sets) {
-            const groupRestSegment = push("group-rest", groupRest, { set, rep });
+            const groupRestSegment = push("group-rest", cfg.groupRest, { set, rep });
             tone(groupRestSegment.start, "fall");
-            voice(groupRestSegment.start + TONE_GAP, `group-rest-${groupRest}`);
+            restCue(groupRestSegment.start + TONE_GAP, `set-done-${set}`, cfg.groupRest);
             voice(groupRestSegment.end - 10, `in10-set-${set + 1}`);
             countdownTicks(groupRestSegment.end);
           }
@@ -171,7 +245,7 @@ globalThis.RehabCore = (() => {
         tone(stretch.start, "rise"); voice(stretch.start + TONE_GAP, "stretch"); countdownVoice(stretch.end);
         if (round < item.rounds) {
           const roundRest = push("round-rest", item.roundRest, { round });
-          tone(roundRest.start, "fall"); voice(roundRest.start + TONE_GAP, "round-rest");
+          tone(roundRest.start, "fall"); restCue(roundRest.start + TONE_GAP, "round-done", item.roundRest);
           voice(roundRest.end - 10, `in10-round-${round + 1}`);
           countdownTicks(roundRest.end);
         }
@@ -182,9 +256,9 @@ globalThis.RehabCore = (() => {
     if (isLast) {
       tone(t, "chime"); voice(t + CHIME_GAP, "all-done");
       tail = t + CHIME_GAP + voiceSeconds("all-done") + 0.6;
-    } else if (plan.stageRest) {
-      const stageRest = push("stage-rest", plan.stageRest);
-      tone(stageRest.start, "fall"); voice(stageRest.start + TONE_GAP, "stage-rest");
+    } else if (cfg.stageRest) {
+      const stageRest = push("stage-rest", cfg.stageRest);
+      tone(stageRest.start, "fall"); restCue(stageRest.start + TONE_GAP, "stage-done", cfg.stageRest);
       tone(stageRest.end, "chime"); voice(stageRest.end + CHIME_GAP, "stage-rest-end");
       tail = stageRest.end + CHIME_GAP + voiceSeconds("stage-rest-end") + 0.6;
     } else {
@@ -192,7 +266,7 @@ globalThis.RehabCore = (() => {
       tail = t + CHIME_GAP + voiceSeconds("item-done") + 0.6;
     }
     events.sort((a, b) => a.at - b.at);
-    const result = freeze({ plan: planId, index, item, manual: false, segments, events, end: t, duration: tail, isLast });
+    const result = freeze({ plan: planId, index, item, manual: false, segments, events, end: t, duration: tail, isLast, sig });
     compiled.set(cacheKey, result);
     return result;
   }
@@ -240,7 +314,7 @@ globalThis.RehabCore = (() => {
       events.push({ at: lead + TONE_GAP, voice: actionVoice(segment) });
     }
     events.sort((a, b) => a.at - b.at);
-    return freeze({ plan: item.plan, index: item.index, start, lead, mode, events, duration: item.duration - start + lead });
+    return freeze({ key: `${item.plan}:${item.index}:${mode}:${start}:${item.sig}`, plan: item.plan, index: item.index, start, lead, mode, events, duration: item.duration - start + lead });
   }
   function manualTrack(planId, index, set, withIntro) {
     const plan = planOf(planId);
@@ -249,10 +323,10 @@ globalThis.RehabCore = (() => {
     if (withIntro) { events.push({ at, voice: `intro-${plan.letter}-${index}` }); at += voiceSeconds(`intro-${plan.letter}-${index}`) + 0.35; }
     events.push({ at, voice: `manual-${set}` });
     at += voiceSeconds(`manual-${set}`) + 0.4;
-    return freeze({ plan: planId, index, start: 0, lead: 0, mode: "manual", events, duration: at });
+    return freeze({ key: `${planId}:${index}:manual:${set}:${withIntro}`, plan: planId, index, start: 0, lead: 0, mode: "manual", events, duration: at });
   }
   function finishTrack() {
-    return freeze({ mode: "finish", start: 0, lead: 0, events: [{ at: 0.1, tone: "chime" }, { at: 0.1 + CHIME_GAP, voice: "all-done" }], duration: 0.1 + CHIME_GAP + voiceSeconds("all-done") + 0.5 });
+    return freeze({ key: "finish", mode: "finish", start: 0, lead: 0, events: [{ at: 0.1, tone: "chime" }, { at: 0.1 + CHIME_GAP, voice: "all-done" }], duration: 0.1 + CHIME_GAP + voiceSeconds("all-done") + 0.5 });
   }
   function testTrack() {
     const events = [{ at: 0.2, voice: "test" }];
@@ -263,7 +337,7 @@ globalThis.RehabCore = (() => {
     at += 1.4;
     for (const key of ["n3", "n2", "n1"]) { events.push({ at, voice: key }); at += 1; }
     events.push({ at, tone: "tick" });
-    return freeze({ mode: "test", start: 0, lead: 0, events, duration: at + 0.5 });
+    return freeze({ key: "test", mode: "test", start: 0, lead: 0, events, duration: at + 0.5 });
   }
 
   // Where a playing track is: lead-in, a segment, or the item's spoken tail.
@@ -278,23 +352,29 @@ globalThis.RehabCore = (() => {
     return { phase: "segment", remaining: segment.end - itemTime, segment, itemTime };
   }
 
-  function doseSeconds(planId, groupRest = 60) {
+  function doseSeconds(planId, config) {
     const plan = planOf(planId);
-    return plan.items.reduce((sum, _, index) => sum + compile(planId, index, groupRest).segments.filter(s => s.dose).reduce((a, s) => a + s.seconds, 0), 0);
+    return plan.items.reduce((sum, _, index) => sum + compile(planId, index, config).segments.filter(s => s.dose).reduce((a, s) => a + s.seconds, 0), 0);
   }
-  function doseSegments(planId, groupRest = 60) {
-    const plan = planOf(planId);
-    return plan.items.reduce((sum, item, index) => sum + (item.type === "manual" ? item.sets : compile(planId, index, groupRest).segments.filter(s => s.dose).length), 0);
+  function doseSegments(planId, config) {
+    const items = itemsFor(planId, config);
+    return items.reduce((sum, item, index) => sum + (item.type === "manual" ? item.sets : compile(planId, index, config).segments.filter(s => s.dose).length), 0);
   }
   function itemDose(item) {
     if (item.type === "hold") return `保持 ${item.hold} 秒 × ${item.reps} 次 × ${item.sets} 组`;
-    if (item.type === "rounds") return `踮脚、拉伸各 ${item.work} 秒 × ${item.rounds} 轮`;
+    if (item.type === "rounds") return `踮脚 ${item.work} 秒、拉伸 ${item.stretch} 秒 × ${item.rounds} 轮`;
     return `每组 ${item.reps} 次 × ${item.sets} 组 · 不计时`;
   }
-  function itemRestNote(item, groupRest) {
-    if (item.type === "hold") return `每次间休息 ${item.rest} 秒 · 组间休息 ${GROUP_REST_LABELS[groupRest]}`;
-    if (item.type === "rounds") return `前三轮后各休息 ${item.roundRest} 秒`;
-    return "两组之间自己掌握节奏";
+  function itemRestNote(item, config) {
+    const cfg = { groupRest: 60, ...config };
+    if (item.type === "hold") {
+      const parts = [];
+      if (item.reps > 1) parts.push(`每次间休息 ${item.rest} 秒`);
+      if (item.sets > 1) parts.push(`组间休息 ${REST_LABELS[cfg.groupRest]}`);
+      return parts.join(" · ");
+    }
+    if (item.type === "rounds") return item.rounds > 1 ? `每轮之间休息 ${item.roundRest} 秒` : "";
+    return item.sets > 1 ? "两组之间自己掌握节奏" : "";
   }
 
   const localDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -325,20 +405,20 @@ globalThis.RehabCore = (() => {
 
   // One training session. The UI drives time; this object only decides what may happen next.
   class Session {
-    constructor({ plan, groupRest = 60, id, item = 0, at = 0, state = "new", set = 1 }) {
-      planOf(plan); checkRest(groupRest);
+    constructor({ plan, config, id, item = 0, at = 0, state = "new", set = 1 }) {
+      planOf(plan);
       if (!validId(id)) throw new Error("invalid session id");
-      Object.assign(this, { plan, groupRest, id, item, at, state, set, track: null, completion: null });
+      Object.assign(this, { plan, config: normalize(plan, config), id, item, at, state, set, track: null, completion: null });
     }
-    get items() { return planOf(this.plan).items; }
+    get items() { return itemsFor(this.plan, this.config); }
     get current() { return this.items[this.item]; }
-    compiled(index = this.item) { return compile(this.plan, index, this.groupRest); }
+    compiled(index = this.item) { return compile(this.plan, index, this.config); }
     // The track the next primary action will play, or null for manual steps.
     pendingTrack() {
       if (this.state === "new") return buildTrack(this.compiled(0), 0, "start");
       if (this.state === "between") return this.current.type === "manual" ? manualTrack(this.plan, this.item, 1, true) : buildTrack(this.compiled(), 0, "start");
       if (this.state === "paused") return buildTrack(this.compiled(), this.at, "resume");
-      if (this.state === "manual-ready") return manualTrack(this.plan, this.item, 2, false);
+      if (this.state === "manual-ready") return manualTrack(this.plan, this.item, this.set, false);
       return null;
     }
     // Primary action from new / between / paused / manual-ready.
@@ -346,8 +426,8 @@ globalThis.RehabCore = (() => {
       const track = this.pendingTrack();
       if (!track) return null;
       if (this.current.type === "manual") {
-        // The second set needs its own explicit start; a double tap cannot complete both sets.
-        this.set = this.state === "manual-ready" ? 2 : 1;
+        // Every later set needs its own explicit start; a double tap cannot complete two sets.
+        if (this.state !== "manual-ready") this.set = 1;
         this.state = "manual"; this.track = track;
         return track;
       }
@@ -386,7 +466,7 @@ globalThis.RehabCore = (() => {
     }
     completeManualSet(date = new Date()) {
       if (this.state !== "manual") return null;
-      if (this.set === 1) { this.state = "manual-ready"; this.set = 2; this.track = null; return "manual-ready"; }
+      if (this.set < this.current.sets) { this.state = "manual-ready"; this.set += 1; this.track = null; return "manual-ready"; }
       return this.finish(date);
     }
     finish(date) {
@@ -400,32 +480,41 @@ globalThis.RehabCore = (() => {
     snapshot() {
       if (["new", "finished"].includes(this.state)) return null;
       const state = this.state === "running" ? "paused" : this.state;
-      return { version: 3, plan: this.plan, groupRest: this.groupRest, id: this.id, item: this.item, at: this.at, state, set: this.set };
+      return { version: 4, plan: this.plan, config: { ...this.config }, id: this.id, item: this.item, at: this.at, state, set: this.set };
     }
+    // Version 3 snapshots only carried the group rest; they restore with every other setting at its default.
     static restore(value) {
-      if (!value || value.version !== 3 || !PLANS[value.plan] || !GROUP_REST_OPTIONS.includes(value.groupRest) || !validId(value.id)) return null;
-      const items = PLANS[value.plan].items;
+      if (!value || !PLANS[value.plan] || !validId(value.id)) return null;
+      let config;
+      if (value.version === 4) {
+        if (!value.config || typeof value.config !== "object") return null;
+        config = clean(value.plan, value.config);
+        if (fieldKeys(value.plan).some(key => value.config[key] !== config[key]) || !withinLimit(value.plan, config)) return null;
+      } else if (value.version === 3 && REST_OPTIONS.includes(value.groupRest)) config = clean(value.plan, value.groupRest);
+      else return null;
+      const items = itemsFor(value.plan, config);
       if (!Number.isInteger(value.item) || !items[value.item] || !SNAPSHOT_STATES.has(value.state)) return null;
       const item = items[value.item];
       if (item.type === "manual") {
         if (!["between", "manual", "manual-ready"].includes(value.state)) return null;
         // A refresh during a manual set returns to that set's explicit start.
-        const state = value.state === "manual" ? (value.set === 2 ? "manual-ready" : "between") : value.state;
-        return new Session({ ...value, at: 0, state, set: state === "manual-ready" ? 2 : 1 });
+        const finished = Number.isInteger(value.set) && value.set >= 1 && value.set <= item.sets ? value.set : 1;
+        const state = value.state === "between" || finished === 1 ? "between" : "manual-ready";
+        return new Session({ plan: value.plan, config, id: value.id, item: value.item, at: 0, state, set: state === "manual-ready" ? finished : 1 });
       }
       if (value.state === "manual" || value.state === "manual-ready") return null;
-      const end = compile(value.plan, value.item, value.groupRest).end;
+      const end = compile(value.plan, value.item, config).end;
       if (!(Number.isFinite(value.at) && value.at >= 0 && value.at < end)) return null;
-      return new Session({ ...value, at: value.state === "between" ? 0 : value.at, set: 1 });
+      return new Session({ plan: value.plan, config, id: value.id, item: value.item, at: value.state === "between" ? 0 : value.at, state: value.state, set: 1 });
     }
   }
   // Human-readable place for resume cards: "第 3 项 · 第 1 组".
-  function describePlace(planId, index, at, groupRest = 60) {
+  function describePlace(planId, index, at, config) {
     const item = planOf(planId).items[index];
     if (!item) return "";
     const head = `第 ${index + 1} 项`;
     if (item.type === "manual") return head;
-    const segment = segmentAt(compile(planId, index, groupRest), at);
+    const segment = segmentAt(compile(planId, index, config), at);
     if (!segment) return head;
     if (segment.set) return `${head} · 第 ${segment.set} 组`;
     if (segment.round) return `${head} · 第 ${segment.round} 轮`;
@@ -433,9 +522,9 @@ globalThis.RehabCore = (() => {
   }
 
   return Object.freeze({
-    PLAN_A, PLAN_B, PLAN_IDS, PLANS, GROUP_REST_OPTIONS, GROUP_REST_LABELS, VOICE_TEXT, TONE_SECONDS,
+    PLAN_A, PLAN_B, PLAN_IDS, PLANS, REST_OPTIONS, REST_LABELS, FIELDS, MAX_ITEM_SECONDS, VOICE_TEXT, TONE_SECONDS,
     PREP_SECONDS, SETTLE_SECONDS, COUNT_IN, RESUME_LEAD, TONE_GAP, WORK_KINDS, SKIPPABLE_KINDS,
-    planOf, compile, segmentAt, resumePoint, skipTarget, buildTrack, manualTrack, finishTrack, testTrack, position,
+    planOf, defaults, normalize, itemsFor, choices, changedKeys, fieldKeys, compile, segmentAt, resumePoint, skipTarget, buildTrack, manualTrack, finishTrack, testTrack, position,
     doseSeconds, doseSegments, itemDose, itemRestNote, voiceSeconds, describePlace,
     localDate, validDate, validId, weekDates, monthCells, Session
   });

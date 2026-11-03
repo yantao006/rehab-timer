@@ -6,7 +6,7 @@
 //   node scripts/generate-voice.mjs --voice Tingting --rate 180
 //   node scripts/generate-voice.mjs --dir path/to/recordings   # <key>.wav|.m4a|.mp3 per cue
 //
-// Needs ffmpeg. Output: 22.05 kHz mono 16-bit PCM, loudness-normalised per clip.
+// Needs ffmpeg. Output: 22.05 kHz mono 16-bit PCM, loudness-normalised per clip, plus a small AAC copy.
 import { readFile, writeFile, mkdtemp, rm, access } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -78,7 +78,16 @@ header.write('data', 36); header.writeUInt32LE(body.length, 40);
 const wav = Buffer.concat([header, body]);
 const version = createHash('sha256').update(wav).digest('hex').slice(0, 12);
 await writeFile(path.join(root, 'audio/voice.wav'), wav);
-const manifest = { version, rate: RATE, source: recordings ? `recordings:${path.basename(recordings)}` : `macOS say ${voiceName}${sayRate ? ` -r ${sayRate}` : ''}`, clips };
+const samples = body.length / 2;
+
+// A much smaller AAC copy for slow networks. The page tries it first and checks its decoded length
+// against `samples`; if a browser pads or trims it differently, the page falls back to the WAV.
+const compactFile = path.join(root, 'audio/voice.m4a');
+execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', path.join(root, 'audio/voice.wav'), '-c:a', 'aac', '-b:a', '40k', '-movflags', '+faststart', compactFile]);
+const decoded = execFileSync('ffmpeg', ['-v', 'error', '-i', compactFile, '-f', 's16le', '-ac', '1', '-ar', String(RATE), '-'], { maxBuffer: 1 << 28 }).length / 2;
+if (Math.abs(decoded - samples) > RATE * 0.02) throw new Error(`voice.m4a decodes to ${decoded} samples, expected ${samples}`);
+const compactBytes = (await readFile(compactFile)).length;
+const manifest = { version, rate: RATE, samples, compact: { file: 'voice.m4a', bytes: compactBytes }, source: recordings ? `recordings:${path.basename(recordings)}` : `macOS say ${voiceName}${sayRate ? ` -r ${sayRate}` : ''}`, clips };
 await writeFile(path.join(root, 'audio/voice.json'), JSON.stringify(manifest, null, 2) + '\n');
 await rm(tmp, { recursive: true, force: true });
-console.log(`audio/voice.wav ${(wav.length / 1048576).toFixed(2)} MB, ${Object.keys(clips).length} clips, version ${version}`);
+console.log(`audio/voice.wav ${(wav.length / 1048576).toFixed(2)} MB, audio/voice.m4a ${(compactBytes / 1048576).toFixed(2)} MB, ${Object.keys(clips).length} clips, version ${version}`);
