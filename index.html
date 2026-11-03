@@ -101,6 +101,24 @@ svg { display: block; }
 .segmented { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: var(--seg); border-radius: 12px; padding: 4px; }
 .segmented button { min-height: 40px; border-radius: 9px; font-size: .9rem; }
 .segmented button[aria-checked="true"] { background: var(--card); font-weight: 700; box-shadow: 0 1px 2px rgba(8,40,60,.14); }
+/* training settings */
+.params { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; }
+.params summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; cursor: pointer; list-style: none; font-weight: 650; }
+.params summary::-webkit-details-marker { display: none; }
+.params-open { color: var(--pool); font-weight: 650; }
+.param-rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.param-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.param-row:last-child { border-bottom: 0; }
+.param-row, .params .hint, .params .link-button { scroll-margin-bottom: 110px; }
+.param-label { font-size: .95rem; }
+.param-row.changed .param-label { font-weight: 700; }
+.stepper { display: grid; grid-template-columns: 44px 76px 44px; align-items: center; background: var(--seg); border-radius: 12px; }
+.stepper button { min-height: 44px; font-size: 1.3rem; font-weight: 600; border-radius: 12px; }
+.stepper button:disabled { opacity: .35; }
+.stepper output { text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.param-row.changed output { color: #9c3a12; }
+.params .hint, .params .notice { margin: 8px 0 0; }
+.params > .link-button { margin: 4px 0 8px; }
 .sound-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .toggle { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-weight: 600; }
 .link-button { min-height: 44px; padding: 0 6px; color: var(--pool); font-weight: 650; }
@@ -136,7 +154,10 @@ svg { display: block; }
 .dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); }
 .dots i.d { background: #fff; border-color: #fff; }
 .dots i.c { border-color: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.25); }
-.dots.dim { opacity: .45; margin-top: 4px; }
+.dots.dim { opacity: .45; }
+.dot-stack { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.dot-stack:empty { display: none; }
+.dot-stack .dots { margin-top: 0; }
 .train-bottom { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .train-bottom.wide { align-items: stretch; }
 .round { width: 84px; height: 84px; border-radius: 50%; background: #fff; color: var(--night); display: grid; place-items: center; box-shadow: 0 8px 20px -10px rgba(0,0,0,.6); }
@@ -248,11 +269,17 @@ svg { display: block; }
         <h2 class="label">先准备好这些</h2>
         <div class="chips" id="prepTools"></div>
         <ol class="item-list" id="prepItems"></ol>
-        <h2 class="label" id="restLabel">组间休息</h2>
-        <div class="segmented" id="restOptions" role="radiogroup" aria-labelledby="restLabel"></div>
-        <p class="hint" id="restHint">只用于前四项的两组之间，可以跳过。</p>
+        <h2 class="label" id="paramsLabel">训练参数</h2>
+        <details class="params" id="prepParams">
+          <summary><span id="paramsSummary"></span><span class="params-open" aria-hidden="true">调整</span></summary>
+          <div class="param-rows" id="paramRows"></div>
+          <p class="hint" id="paramsHint"></p>
+          <p class="notice" id="paramsCap" role="status" hidden></p>
+          <button class="link-button" id="paramsReset" type="button" hidden>恢复默认</button>
+        </details>
         <div class="sound-row"><button class="toggle" id="prepSound" type="button" aria-pressed="true">声音：开</button><button class="link-button" id="prepTest" type="button">试听</button></div>
         <p class="notice" id="prepNotice" role="status" hidden></p>
+        <button class="link-button" id="prepVoiceAction" type="button" hidden></button>
       </div>
       <div class="dock"><button class="primary" id="prepStart" type="button">开始训练</button></div>
     </section>
@@ -268,8 +295,7 @@ svg { display: block; }
           <p class="phase" id="runPhase"></p>
           <p class="count" id="runCount" aria-hidden="true"></p>
           <p class="train-sub" id="runSub"></p>
-          <div class="dots" id="runDots" aria-hidden="true"></div>
-          <div class="dots dim" id="runDots2" aria-hidden="true"></div>
+          <div class="dot-stack" id="runDots" aria-hidden="true"></div>
         </div>
         <div class="train-bottom">
           <button class="pill" id="runSkip" type="button" hidden>跳过休息</button>
@@ -311,6 +337,7 @@ svg { display: block; }
         <div class="chips" id="betweenChips"></div>
         <p class="hint" id="betweenRest"></p>
         <p class="notice" id="betweenNotice" role="status" hidden></p>
+        <button class="link-button" id="betweenVoiceAction" type="button" hidden></button>
       </div>
       <div class="dock"><button class="primary" id="betweenStart" type="button">准备好了，开始</button><p class="hint center" id="betweenHint">点击后有 10 秒就位倒数</p></div>
     </section>
@@ -358,21 +385,41 @@ svg { display: block; }
     </div>
   </div>
   <audio id="player" preload="auto" playsinline></audio>
-  <script id="rehab-voice">globalThis.RehabVoice = Object.freeze({"version":"51ccba77892b","rate":22050,"source":"macOS say Tingting","clips":{"start":[0,658],"relax":[808,694],"n3":[1652,467],"n2":[2269,364],"n1":[2783,349],"rep-2":[3282,753],"rep-3":[4185,817],"rep-4":[5152,779],"rep-5":[6081,748],"rep-6":[6979,789],"set-1":[7918,719],"set-2":[8787,761],"round-1":[9698,863],"round-2":[10711,853],"round-3":[11714,913],"round-4":[12777,883],"prepare":[13811,547],"in10-set-1":[14507,2024],"in10-set-2":[16681,2065],"in10-round-2":[18896,2158],"in10-round-3":[21204,2219],"in10-round-4":[23573,2188],"group-rest-60":[25911,2722],"group-rest-90":[28783,2674],"group-rest-120":[31607,2802],"group-rest-150":[34559,2754],"item-done":[37462,1252],"stage-rest":[38864,2743],"stage-rest-end":[41757,2589],"tiptoe":[44496,622],"stretch":[45268,845],"round-rest":[46263,2833],"resume":[49246,566],"manual-1":[49962,3816],"manual-2":[53928,3855],"all-done":[57933,1189],"test":[59272,3688],"intro-a-0":[63111,4529],"intro-a-1":[67790,4115],"intro-a-2":[72055,4150],"intro-a-3":[76355,4135],"intro-a-4":[80640,3136],"intro-b-0":[83927,3960],"intro-b-1":[88037,3228],"intro-b-2":[91415,4315],"intro-b-3":[95880,3527],"intro-b-4":[99557,3087]}});</script>
+  <script id="rehab-voice">globalThis.RehabVoice = Object.freeze({"version":"f7f1138520a0","rate":22050,"samples":2908979,"compact":{"file":"voice.m4a","bytes":768687},"source":"macOS say Tingting","clips":{"start":[0,658],"relax":[808,694],"n3":[1652,467],"n2":[2269,364],"n1":[2783,349],"rep-2":[3282,753],"rep-3":[4185,817],"rep-4":[5152,779],"rep-5":[6081,748],"rep-6":[6979,789],"rep-7":[7918,807],"rep-8":[8875,757],"rep-9":[9782,803],"rep-10":[10734,794],"set-1":[11679,719],"set-2":[12548,761],"set-3":[13458,799],"set-4":[14407,786],"round-1":[15343,863],"round-2":[16356,853],"round-3":[17360,913],"round-4":[18423,883],"round-5":[19456,844],"round-6":[20450,893],"prepare":[21493,547],"in10-set-1":[22189,2024],"in10-set-2":[24363,2065],"in10-set-3":[26578,2104],"in10-set-4":[28832,2090],"in10-round-1":[31072,2163],"in10-round-2":[33385,2158],"in10-round-3":[35693,2219],"in10-round-4":[38062,2188],"in10-round-5":[40400,2153],"in10-round-6":[42703,2199],"set-done-1":[45052,1211],"set-done-2":[46413,1261],"set-done-3":[47825,1306],"rest-20":[49281,1372],"rest-30":[50803,1420],"rest-45":[52373,1585],"rest-60":[54108,1325],"rest-90":[55583,1276],"rest-120":[57009,1405],"rest-150":[58564,1356],"rest-180":[60070,1410],"item-done":[61630,1252],"stage-done":[63032,1237],"stage-rest-end":[64419,2589],"tiptoe":[67158,622],"stretch":[67930,845],"round-done":[68925,1227],"resume":[70302,566],"manual-1":[71018,3816],"manual-2":[74984,3855],"manual-3":[78989,3895],"manual-4":[83035,3880],"all-done":[87065,1189],"test":[88404,3688],"intro-a-0":[92242,4529],"intro-a-1":[96922,4115],"intro-a-2":[101187,4150],"intro-a-3":[105487,4135],"intro-a-4":[109772,3136],"intro-b-0":[113059,3960],"intro-b-1":[117169,3228],"intro-b-2":[120547,4315],"intro-b-3":[125012,3527],"intro-b-4":[128689,3087]}});</script>
   <script id="rehab-core">/* Pure domain code: fixed plans, timeline compiler, voice-cue schedule and session state.
    No DOM, no audio, no storage. Tests execute this exact script. */
 globalThis.RehabCore = (() => {
   "use strict";
   const PLAN_A = "five-stage-v1";
   const PLAN_B = "lower-limb-joints-v1";
-  const GROUP_REST_OPTIONS = Object.freeze([60, 90, 120, 150]);
-  const GROUP_REST_LABELS = Object.freeze({ 60: "60 秒", 90: "1 分半", 120: "2 分钟", 150: "2 分半" });
+  // Spoken rest lengths: every value here has a "休息…" clip, so cues always say the real duration.
+  const REST_OPTIONS = Object.freeze([20, 30, 45, 60, 90, 120, 150, 180]);
+  const REST_LABELS = Object.freeze({ 0: "不休息", 20: "20 秒", 30: "30 秒", 45: "45 秒", 60: "60 秒", 90: "1 分半", 120: "2 分钟", 150: "2 分半", 180: "3 分钟" });
+  const MAX_SETS = 4, MAX_REPS = 10, MAX_ROUNDS = 6;
+  const MAX_ITEM_SECONDS = 1500; // one rendered track stays near 65 MB at most, which a phone can hold
+  const range = (from, to, step = 1) => Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => from + i * step);
+  const unitLabel = unit => value => `${value} ${unit}`;
+  // Adjustable before a session starts. `values` is the list a stepper walks through; the smallest
+  // values are the shortest the voice schedule can fit without overlap (tests sweep every one).
+  const FIELDS = Object.freeze({
+    sets: { label: "每项组数", values: range(1, MAX_SETS), format: unitLabel("组"), scope: "all" },
+    reps: { label: "每组次数", values: range(1, MAX_REPS), format: unitLabel("次"), scope: "hold" },
+    hold: { label: "每次保持", values: range(5, 60, 5), format: unitLabel("秒"), scope: "hold" },
+    repRest: { label: "次间休息", values: range(4, 20), format: unitLabel("秒"), scope: "hold" },
+    groupRest: { label: "组间休息", values: REST_OPTIONS, format: v => REST_LABELS[v], scope: "hold" },
+    stageRest: { label: "项间休息", values: [0, ...REST_OPTIONS], format: v => REST_LABELS[v], scope: "all" },
+    rounds: { label: "踮脚拉伸轮数", values: range(1, MAX_ROUNDS), format: unitLabel("轮"), scope: "rounds" },
+    work: { label: "踮脚每轮", values: [10, 15, 20, 30, 45, 60], format: unitLabel("秒"), scope: "rounds" },
+    stretch: { label: "拉伸每轮", values: [10, 15, 20, 30, 45, 60], format: unitLabel("秒"), scope: "rounds" },
+    roundRest: { label: "轮间休息", values: REST_OPTIONS, format: v => REST_LABELS[v], scope: "rounds" }
+  });
   const PREP_SECONDS = 30;     // first item only, skippable, part of the planned total
   const SETTLE_SECONDS = 10;   // after tapping "开始" on items 2-5, skippable, not part of the dose
   const COUNT_IN = 4;          // lead-in before a resumed or skipped-to work segment
   const RESUME_LEAD = 1.2;     // lead-in before a resumed rest
   const TONE_GAP = 0.5;        // voice after a boundary tone
   const CHIME_GAP = 0.75;
+  const REST_CUE_GAP = 0.12;   // between "第一组完成" and "休息一分钟"
   const WORK_KINDS = Object.freeze(new Set(["work", "tiptoe", "stretch"]));
   const SKIPPABLE_KINDS = Object.freeze(new Set(["prep", "settle", "group-rest", "round-rest"]));
 
@@ -412,20 +459,24 @@ globalThis.RehabCore = (() => {
   const PLAN_IDS = Object.freeze([PLAN_A, PLAN_B]);
 
   // Every spoken cue. scripts/generate-voice.mjs renders these texts into audio/voice.wav.
+  // Numbered cues cover the largest adjustable counts; rest lengths are spoken as one clip each.
+  const CN = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  const REST_SPOKEN = { 20: "二十秒", 30: "三十秒", 45: "四十五秒", 60: "一分钟", 90: "一分半", 120: "两分钟", 150: "两分半", 180: "三分钟" };
+  const numbered = (from, to, make) => Object.fromEntries(range(from, to).map(n => [make.key(n), make.text(n)]));
   const VOICE_TEXT = freeze({
     start: "开始", relax: "放松", n3: "三", n2: "二", n1: "一",
-    "rep-2": "第二次", "rep-3": "第三次", "rep-4": "第四次", "rep-5": "第五次", "rep-6": "第六次",
-    "set-1": "第一组", "set-2": "第二组",
-    "round-1": "第一轮", "round-2": "第二轮", "round-3": "第三轮", "round-4": "第四轮",
+    ...numbered(2, MAX_REPS, { key: n => `rep-${n}`, text: n => `第${CN[n]}次` }),
+    ...numbered(1, MAX_SETS, { key: n => `set-${n}`, text: n => `第${CN[n]}组` }),
+    ...numbered(1, MAX_ROUNDS, { key: n => `round-${n}`, text: n => `第${CN[n]}轮` }),
     prepare: "准备",
-    "in10-set-1": "十秒后开始第一组", "in10-set-2": "十秒后开始第二组",
-    "in10-round-2": "十秒后开始第二轮", "in10-round-3": "十秒后开始第三轮", "in10-round-4": "十秒后开始第四轮",
-    "group-rest-60": "第一组完成，休息一分钟", "group-rest-90": "第一组完成，休息一分半",
-    "group-rest-120": "第一组完成，休息两分钟", "group-rest-150": "第一组完成，休息两分半",
-    "item-done": "这一项完成", "stage-rest": "这一节完成，休息一分钟", "stage-rest-end": "休息结束，准备下一项",
-    tiptoe: "踮脚", stretch: "换拉伸", "round-rest": "这一轮完成，休息三十秒",
+    ...numbered(1, MAX_SETS, { key: n => `in10-set-${n}`, text: n => `十秒后开始第${CN[n]}组` }),
+    ...numbered(1, MAX_ROUNDS, { key: n => `in10-round-${n}`, text: n => `十秒后开始第${CN[n]}轮` }),
+    ...numbered(1, MAX_SETS - 1, { key: n => `set-done-${n}`, text: n => `第${CN[n]}组完成` }),
+    ...Object.fromEntries(REST_OPTIONS.map(seconds => [`rest-${seconds}`, `休息${REST_SPOKEN[seconds]}`])),
+    "item-done": "这一项完成", "stage-done": "这一节完成", "stage-rest-end": "休息结束，准备下一项",
+    tiptoe: "踮脚", stretch: "换拉伸", "round-done": "这一轮完成",
     resume: "继续",
-    "manual-1": "第一组，做八到十次，做完点完成", "manual-2": "第二组，做八到十次，做完点完成",
+    ...numbered(1, MAX_SETS, { key: n => `manual-${n}`, text: n => `第${CN[n]}组，做八到十次，做完点完成` }),
     "all-done": "训练完成",
     test: "声音测试。能听清，就可以开始了。",
     "intro-a-0": "第一项，俯卧左大腿后伸。准备一公斤负重。",
@@ -455,23 +506,71 @@ globalThis.RehabCore = (() => {
     if (!plan) throw new Error("unknown plan");
     return plan;
   }
-  function checkRest(groupRest) {
-    if (!GROUP_REST_OPTIONS.includes(groupRest)) throw new Error("invalid group rest");
-    return groupRest;
+
+  // ---------- adjustable settings ----------
+  // A config holds the numbers the user may change before starting: it applies to every plan item of
+  // the matching type. Defaults are the plan's own numbers, so an untouched config changes nothing.
+  const defaultsCache = new Map(), itemsCache = new Map();
+  function defaults(planId) {
+    if (!defaultsCache.has(planId)) {
+      const plan = planOf(planId);
+      const holdItem = plan.items.find(item => item.type === "hold"), roundsItem = plan.items.find(item => item.type === "rounds");
+      const base = { sets: holdItem.sets, reps: holdItem.reps, hold: holdItem.hold, repRest: holdItem.rest, groupRest: 60, stageRest: plan.stageRest };
+      if (roundsItem) Object.assign(base, { rounds: roundsItem.rounds, work: roundsItem.work, stretch: roundsItem.stretch, roundRest: roundsItem.roundRest });
+      defaultsCache.set(planId, freeze(base));
+    }
+    return defaultsCache.get(planId);
   }
+  const fieldKeys = planId => Object.keys(defaults(planId));
+  const signature = config => Object.keys(config).sort().map(key => `${key}=${config[key]}`).join(",");
+  // Any input (nothing, a legacy group-rest number, or stored overrides) becomes a complete config.
+  // Unknown keys and values outside a field's list fall back to the plan default.
+  function clean(planId, input) {
+    const base = defaults(planId);
+    const patch = typeof input === "number" ? { groupRest: input } : input && typeof input === "object" ? input : {};
+    const result = {};
+    for (const key of Object.keys(base)) result[key] = FIELDS[key].values.includes(patch[key]) ? patch[key] : base[key];
+    return freeze(result);
+  }
+  function itemsFor(planId, config) {
+    const cfg = clean(planId, config), cacheKey = `${planId}:${signature(cfg)}`;
+    if (!itemsCache.has(cacheKey)) {
+      itemsCache.set(cacheKey, freeze(planOf(planId).items.map(item => {
+        if (item.type === "hold") return { ...item, sets: cfg.sets, reps: cfg.reps, hold: cfg.hold, rest: cfg.repRest };
+        if (item.type === "rounds") return { ...item, rounds: cfg.rounds, work: cfg.work, stretch: cfg.stretch, roundRest: cfg.roundRest };
+        return { ...item, sets: cfg.sets };
+      })));
+    }
+    return itemsCache.get(cacheKey);
+  }
+  // Longest timed item, in seconds, including the lead-in and spoken ending.
+  const longestItem = (planId, config) => Math.max(...planOf(planId).items.map((_, index) => compile(planId, index, config).duration));
+  const withinLimit = (planId, config) => longestItem(planId, config) <= MAX_ITEM_SECONDS;
+  // Complete, validated config. Stored values that would make an item too long fall back to defaults.
+  function normalize(planId, input) {
+    const cfg = clean(planId, input);
+    return withinLimit(planId, cfg) ? cfg : defaults(planId);
+  }
+  // The values a stepper may offer for one field, given the other settings.
+  function choices(planId, config, key) {
+    const cfg = clean(planId, config);
+    return FIELDS[key].values.filter(value => value === cfg[key] || withinLimit(planId, { ...cfg, [key]: value }));
+  }
+  const changedKeys = (planId, config) => { const cfg = clean(planId, config), base = defaults(planId); return fieldKeys(planId).filter(key => cfg[key] !== base[key]); };
 
   const compiled = new Map();
   // Expand one item into absolute segments (item seconds from 0) and the cue events laid on them.
-  function compile(planId, index, groupRest = 60) {
+  function compile(planId, index, config) {
     const plan = planOf(planId);
-    checkRest(groupRest);
-    const item = plan.items[index];
+    const cfg = clean(planId, config);
+    const item = itemsFor(planId, cfg)[index];
     if (!item) throw new Error("unknown item");
-    const cacheKey = `${planId}:${index}:${groupRest}:${globalThis.RehabVoice?.version || "est"}`;
+    const sig = signature(cfg);
+    const cacheKey = `${planId}:${index}:${sig}:${globalThis.RehabVoice?.version || "est"}`;
     if (compiled.has(cacheKey)) return compiled.get(cacheKey);
     const isLast = index === plan.items.length - 1;
     if (item.type === "manual") {
-      const result = freeze({ plan: planId, index, item, manual: true, segments: [], events: [], end: 0, duration: 0, isLast });
+      const result = freeze({ plan: planId, index, item, manual: true, segments: [], events: [], end: 0, duration: 0, isLast, sig });
       compiled.set(cacheKey, result);
       return result;
     }
@@ -487,6 +586,8 @@ globalThis.RehabCore = (() => {
     const tone = (at, name) => events.push({ at, tone: name });
     const countdownTicks = end => { for (const s of [3, 2, 1]) tone(end - s, "tick"); };
     const countdownVoice = end => { voice(end - 3, "n3"); voice(end - 2, "n2"); voice(end - 1, "n1"); };
+    // "<what finished>，休息<how long>" is two clips so any listed rest length can be spoken.
+    const restCue = (at, done, seconds) => { voice(at, done); voice(at + voiceSeconds(done) + REST_CUE_GAP, `rest-${seconds}`); };
     const intro = `intro-${plan.letter}-${index}`;
 
     if (index === 0) {
@@ -516,9 +617,9 @@ globalThis.RehabCore = (() => {
             voice(rest.end - 1.4 - voiceSeconds(next), next);
             tone(rest.end - 1, "tick");
           } else if (set < item.sets) {
-            const groupRestSegment = push("group-rest", groupRest, { set, rep });
+            const groupRestSegment = push("group-rest", cfg.groupRest, { set, rep });
             tone(groupRestSegment.start, "fall");
-            voice(groupRestSegment.start + TONE_GAP, `group-rest-${groupRest}`);
+            restCue(groupRestSegment.start + TONE_GAP, `set-done-${set}`, cfg.groupRest);
             voice(groupRestSegment.end - 10, `in10-set-${set + 1}`);
             countdownTicks(groupRestSegment.end);
           }
@@ -532,7 +633,7 @@ globalThis.RehabCore = (() => {
         tone(stretch.start, "rise"); voice(stretch.start + TONE_GAP, "stretch"); countdownVoice(stretch.end);
         if (round < item.rounds) {
           const roundRest = push("round-rest", item.roundRest, { round });
-          tone(roundRest.start, "fall"); voice(roundRest.start + TONE_GAP, "round-rest");
+          tone(roundRest.start, "fall"); restCue(roundRest.start + TONE_GAP, "round-done", item.roundRest);
           voice(roundRest.end - 10, `in10-round-${round + 1}`);
           countdownTicks(roundRest.end);
         }
@@ -543,9 +644,9 @@ globalThis.RehabCore = (() => {
     if (isLast) {
       tone(t, "chime"); voice(t + CHIME_GAP, "all-done");
       tail = t + CHIME_GAP + voiceSeconds("all-done") + 0.6;
-    } else if (plan.stageRest) {
-      const stageRest = push("stage-rest", plan.stageRest);
-      tone(stageRest.start, "fall"); voice(stageRest.start + TONE_GAP, "stage-rest");
+    } else if (cfg.stageRest) {
+      const stageRest = push("stage-rest", cfg.stageRest);
+      tone(stageRest.start, "fall"); restCue(stageRest.start + TONE_GAP, "stage-done", cfg.stageRest);
       tone(stageRest.end, "chime"); voice(stageRest.end + CHIME_GAP, "stage-rest-end");
       tail = stageRest.end + CHIME_GAP + voiceSeconds("stage-rest-end") + 0.6;
     } else {
@@ -553,7 +654,7 @@ globalThis.RehabCore = (() => {
       tail = t + CHIME_GAP + voiceSeconds("item-done") + 0.6;
     }
     events.sort((a, b) => a.at - b.at);
-    const result = freeze({ plan: planId, index, item, manual: false, segments, events, end: t, duration: tail, isLast });
+    const result = freeze({ plan: planId, index, item, manual: false, segments, events, end: t, duration: tail, isLast, sig });
     compiled.set(cacheKey, result);
     return result;
   }
@@ -601,7 +702,7 @@ globalThis.RehabCore = (() => {
       events.push({ at: lead + TONE_GAP, voice: actionVoice(segment) });
     }
     events.sort((a, b) => a.at - b.at);
-    return freeze({ plan: item.plan, index: item.index, start, lead, mode, events, duration: item.duration - start + lead });
+    return freeze({ key: `${item.plan}:${item.index}:${mode}:${start}:${item.sig}`, plan: item.plan, index: item.index, start, lead, mode, events, duration: item.duration - start + lead });
   }
   function manualTrack(planId, index, set, withIntro) {
     const plan = planOf(planId);
@@ -610,10 +711,10 @@ globalThis.RehabCore = (() => {
     if (withIntro) { events.push({ at, voice: `intro-${plan.letter}-${index}` }); at += voiceSeconds(`intro-${plan.letter}-${index}`) + 0.35; }
     events.push({ at, voice: `manual-${set}` });
     at += voiceSeconds(`manual-${set}`) + 0.4;
-    return freeze({ plan: planId, index, start: 0, lead: 0, mode: "manual", events, duration: at });
+    return freeze({ key: `${planId}:${index}:manual:${set}:${withIntro}`, plan: planId, index, start: 0, lead: 0, mode: "manual", events, duration: at });
   }
   function finishTrack() {
-    return freeze({ mode: "finish", start: 0, lead: 0, events: [{ at: 0.1, tone: "chime" }, { at: 0.1 + CHIME_GAP, voice: "all-done" }], duration: 0.1 + CHIME_GAP + voiceSeconds("all-done") + 0.5 });
+    return freeze({ key: "finish", mode: "finish", start: 0, lead: 0, events: [{ at: 0.1, tone: "chime" }, { at: 0.1 + CHIME_GAP, voice: "all-done" }], duration: 0.1 + CHIME_GAP + voiceSeconds("all-done") + 0.5 });
   }
   function testTrack() {
     const events = [{ at: 0.2, voice: "test" }];
@@ -624,7 +725,7 @@ globalThis.RehabCore = (() => {
     at += 1.4;
     for (const key of ["n3", "n2", "n1"]) { events.push({ at, voice: key }); at += 1; }
     events.push({ at, tone: "tick" });
-    return freeze({ mode: "test", start: 0, lead: 0, events, duration: at + 0.5 });
+    return freeze({ key: "test", mode: "test", start: 0, lead: 0, events, duration: at + 0.5 });
   }
 
   // Where a playing track is: lead-in, a segment, or the item's spoken tail.
@@ -639,23 +740,29 @@ globalThis.RehabCore = (() => {
     return { phase: "segment", remaining: segment.end - itemTime, segment, itemTime };
   }
 
-  function doseSeconds(planId, groupRest = 60) {
+  function doseSeconds(planId, config) {
     const plan = planOf(planId);
-    return plan.items.reduce((sum, _, index) => sum + compile(planId, index, groupRest).segments.filter(s => s.dose).reduce((a, s) => a + s.seconds, 0), 0);
+    return plan.items.reduce((sum, _, index) => sum + compile(planId, index, config).segments.filter(s => s.dose).reduce((a, s) => a + s.seconds, 0), 0);
   }
-  function doseSegments(planId, groupRest = 60) {
-    const plan = planOf(planId);
-    return plan.items.reduce((sum, item, index) => sum + (item.type === "manual" ? item.sets : compile(planId, index, groupRest).segments.filter(s => s.dose).length), 0);
+  function doseSegments(planId, config) {
+    const items = itemsFor(planId, config);
+    return items.reduce((sum, item, index) => sum + (item.type === "manual" ? item.sets : compile(planId, index, config).segments.filter(s => s.dose).length), 0);
   }
   function itemDose(item) {
     if (item.type === "hold") return `保持 ${item.hold} 秒 × ${item.reps} 次 × ${item.sets} 组`;
-    if (item.type === "rounds") return `踮脚、拉伸各 ${item.work} 秒 × ${item.rounds} 轮`;
+    if (item.type === "rounds") return `踮脚 ${item.work} 秒、拉伸 ${item.stretch} 秒 × ${item.rounds} 轮`;
     return `每组 ${item.reps} 次 × ${item.sets} 组 · 不计时`;
   }
-  function itemRestNote(item, groupRest) {
-    if (item.type === "hold") return `每次间休息 ${item.rest} 秒 · 组间休息 ${GROUP_REST_LABELS[groupRest]}`;
-    if (item.type === "rounds") return `前三轮后各休息 ${item.roundRest} 秒`;
-    return "两组之间自己掌握节奏";
+  function itemRestNote(item, config) {
+    const cfg = { groupRest: 60, ...config };
+    if (item.type === "hold") {
+      const parts = [];
+      if (item.reps > 1) parts.push(`每次间休息 ${item.rest} 秒`);
+      if (item.sets > 1) parts.push(`组间休息 ${REST_LABELS[cfg.groupRest]}`);
+      return parts.join(" · ");
+    }
+    if (item.type === "rounds") return item.rounds > 1 ? `每轮之间休息 ${item.roundRest} 秒` : "";
+    return item.sets > 1 ? "两组之间自己掌握节奏" : "";
   }
 
   const localDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -686,20 +793,20 @@ globalThis.RehabCore = (() => {
 
   // One training session. The UI drives time; this object only decides what may happen next.
   class Session {
-    constructor({ plan, groupRest = 60, id, item = 0, at = 0, state = "new", set = 1 }) {
-      planOf(plan); checkRest(groupRest);
+    constructor({ plan, config, id, item = 0, at = 0, state = "new", set = 1 }) {
+      planOf(plan);
       if (!validId(id)) throw new Error("invalid session id");
-      Object.assign(this, { plan, groupRest, id, item, at, state, set, track: null, completion: null });
+      Object.assign(this, { plan, config: normalize(plan, config), id, item, at, state, set, track: null, completion: null });
     }
-    get items() { return planOf(this.plan).items; }
+    get items() { return itemsFor(this.plan, this.config); }
     get current() { return this.items[this.item]; }
-    compiled(index = this.item) { return compile(this.plan, index, this.groupRest); }
+    compiled(index = this.item) { return compile(this.plan, index, this.config); }
     // The track the next primary action will play, or null for manual steps.
     pendingTrack() {
       if (this.state === "new") return buildTrack(this.compiled(0), 0, "start");
       if (this.state === "between") return this.current.type === "manual" ? manualTrack(this.plan, this.item, 1, true) : buildTrack(this.compiled(), 0, "start");
       if (this.state === "paused") return buildTrack(this.compiled(), this.at, "resume");
-      if (this.state === "manual-ready") return manualTrack(this.plan, this.item, 2, false);
+      if (this.state === "manual-ready") return manualTrack(this.plan, this.item, this.set, false);
       return null;
     }
     // Primary action from new / between / paused / manual-ready.
@@ -707,8 +814,8 @@ globalThis.RehabCore = (() => {
       const track = this.pendingTrack();
       if (!track) return null;
       if (this.current.type === "manual") {
-        // The second set needs its own explicit start; a double tap cannot complete both sets.
-        this.set = this.state === "manual-ready" ? 2 : 1;
+        // Every later set needs its own explicit start; a double tap cannot complete two sets.
+        if (this.state !== "manual-ready") this.set = 1;
         this.state = "manual"; this.track = track;
         return track;
       }
@@ -747,7 +854,7 @@ globalThis.RehabCore = (() => {
     }
     completeManualSet(date = new Date()) {
       if (this.state !== "manual") return null;
-      if (this.set === 1) { this.state = "manual-ready"; this.set = 2; this.track = null; return "manual-ready"; }
+      if (this.set < this.current.sets) { this.state = "manual-ready"; this.set += 1; this.track = null; return "manual-ready"; }
       return this.finish(date);
     }
     finish(date) {
@@ -761,32 +868,41 @@ globalThis.RehabCore = (() => {
     snapshot() {
       if (["new", "finished"].includes(this.state)) return null;
       const state = this.state === "running" ? "paused" : this.state;
-      return { version: 3, plan: this.plan, groupRest: this.groupRest, id: this.id, item: this.item, at: this.at, state, set: this.set };
+      return { version: 4, plan: this.plan, config: { ...this.config }, id: this.id, item: this.item, at: this.at, state, set: this.set };
     }
+    // Version 3 snapshots only carried the group rest; they restore with every other setting at its default.
     static restore(value) {
-      if (!value || value.version !== 3 || !PLANS[value.plan] || !GROUP_REST_OPTIONS.includes(value.groupRest) || !validId(value.id)) return null;
-      const items = PLANS[value.plan].items;
+      if (!value || !PLANS[value.plan] || !validId(value.id)) return null;
+      let config;
+      if (value.version === 4) {
+        if (!value.config || typeof value.config !== "object") return null;
+        config = clean(value.plan, value.config);
+        if (fieldKeys(value.plan).some(key => value.config[key] !== config[key]) || !withinLimit(value.plan, config)) return null;
+      } else if (value.version === 3 && REST_OPTIONS.includes(value.groupRest)) config = clean(value.plan, value.groupRest);
+      else return null;
+      const items = itemsFor(value.plan, config);
       if (!Number.isInteger(value.item) || !items[value.item] || !SNAPSHOT_STATES.has(value.state)) return null;
       const item = items[value.item];
       if (item.type === "manual") {
         if (!["between", "manual", "manual-ready"].includes(value.state)) return null;
         // A refresh during a manual set returns to that set's explicit start.
-        const state = value.state === "manual" ? (value.set === 2 ? "manual-ready" : "between") : value.state;
-        return new Session({ ...value, at: 0, state, set: state === "manual-ready" ? 2 : 1 });
+        const finished = Number.isInteger(value.set) && value.set >= 1 && value.set <= item.sets ? value.set : 1;
+        const state = value.state === "between" || finished === 1 ? "between" : "manual-ready";
+        return new Session({ plan: value.plan, config, id: value.id, item: value.item, at: 0, state, set: state === "manual-ready" ? finished : 1 });
       }
       if (value.state === "manual" || value.state === "manual-ready") return null;
-      const end = compile(value.plan, value.item, value.groupRest).end;
+      const end = compile(value.plan, value.item, config).end;
       if (!(Number.isFinite(value.at) && value.at >= 0 && value.at < end)) return null;
-      return new Session({ ...value, at: value.state === "between" ? 0 : value.at, set: 1 });
+      return new Session({ plan: value.plan, config, id: value.id, item: value.item, at: value.state === "between" ? 0 : value.at, state: value.state, set: 1 });
     }
   }
   // Human-readable place for resume cards: "第 3 项 · 第 1 组".
-  function describePlace(planId, index, at, groupRest = 60) {
+  function describePlace(planId, index, at, config) {
     const item = planOf(planId).items[index];
     if (!item) return "";
     const head = `第 ${index + 1} 项`;
     if (item.type === "manual") return head;
-    const segment = segmentAt(compile(planId, index, groupRest), at);
+    const segment = segmentAt(compile(planId, index, config), at);
     if (!segment) return head;
     if (segment.set) return `${head} · 第 ${segment.set} 组`;
     if (segment.round) return `${head} · 第 ${segment.round} 轮`;
@@ -794,9 +910,9 @@ globalThis.RehabCore = (() => {
   }
 
   return Object.freeze({
-    PLAN_A, PLAN_B, PLAN_IDS, PLANS, GROUP_REST_OPTIONS, GROUP_REST_LABELS, VOICE_TEXT, TONE_SECONDS,
+    PLAN_A, PLAN_B, PLAN_IDS, PLANS, REST_OPTIONS, REST_LABELS, FIELDS, MAX_ITEM_SECONDS, VOICE_TEXT, TONE_SECONDS,
     PREP_SECONDS, SETTLE_SECONDS, COUNT_IN, RESUME_LEAD, TONE_GAP, WORK_KINDS, SKIPPABLE_KINDS,
-    planOf, compile, segmentAt, resumePoint, skipTarget, buildTrack, manualTrack, finishTrack, testTrack, position,
+    planOf, defaults, normalize, itemsFor, choices, changedKeys, fieldKeys, compile, segmentAt, resumePoint, skipTarget, buildTrack, manualTrack, finishTrack, testTrack, position,
     doseSeconds, doseSegments, itemDose, itemRestNote, voiceSeconds, describePlace,
     localDate, validDate, validId, weekDates, monthCells, Session
   });
@@ -809,6 +925,11 @@ globalThis.RehabAudio = (() => {
   const Offline = () => globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
   let sprite = null, loading = null;
 
+  // Some browsers never settle a decode or render they cannot finish; a deadline turns that into an error.
+  const within = (promise, ms, what) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${what} timed out`)), ms);
+    promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+  });
   const supported = () => Boolean(Offline() && globalThis.Blob && globalThis.URL?.createObjectURL);
 
   function decode(data) {
@@ -820,14 +941,50 @@ globalThis.RehabAudio = (() => {
       if (result && typeof result.then === "function") result.then(resolve, reject);
     });
   }
-  async function loadBuffer(data) { sprite = await decode(data); return sprite; }
-  function load(url) {
+  async function loadBuffer(data) { sprite = await within(decode(data), 30000, "decode"); return sprite; }
+  // Download with a stall timer: a slow connection may keep going, but one that stops delivering
+  // bytes for `stallMs` fails, so the page can fall back to silent timing instead of waiting forever.
+  async function download(url, { stallMs = 10000, onProgress } = {}) {
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    let timer = null;
+    const arm = () => { clearTimeout(timer); if (controller) timer = setTimeout(() => controller.abort(), stallMs); };
+    arm();
+    try {
+      const response = await fetch(url, { signal: controller?.signal });
+      if (!response.ok) throw new Error(`voice ${response.status}`);
+      const total = Number(response.headers.get("content-length")) || 0;
+      if (!response.body?.getReader) return await response.arrayBuffer();
+      const reader = response.body.getReader(), chunks = [];
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); received += value.length; arm();
+        onProgress?.(received, total);
+      }
+      const bytes = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+      return bytes.buffer;
+    } finally { clearTimeout(timer); }
+  }
+  // `urls` are tried in order: a small compressed copy first, the WAV as the fallback. A source is only
+  // accepted when it decodes to the expected length, so a browser that pads or trims it differently
+  // cannot shift the clip offsets.
+  function load(urls, options = {}) {
     if (sprite) return Promise.resolve(sprite);
     if (!loading) {
       loading = (async () => {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`voice ${response.status}`);
-        return loadBuffer(await response.arrayBuffer());
+        let failure = new Error("no voice source");
+        for (const url of [].concat(urls)) {
+          try {
+            const buffer = await within(decode(await download(url, options)), 30000, "decode");
+            if (options.samples && Math.abs(buffer.length - options.samples) > RATE * 0.02) throw new Error("voice length mismatch");
+            sprite = buffer;
+            return sprite;
+          } catch (error) { failure = error; }
+        }
+        throw failure;
       })().catch(error => { loading = null; throw error; });
     }
     return loading;
@@ -861,18 +1018,18 @@ globalThis.RehabAudio = (() => {
   }
   function encodeWav(buffer) {
     const samples = buffer.getChannelData(0), length = samples.length;
-    const view = new DataView(new ArrayBuffer(44 + length * 2));
-    const text = (offset, value) => { for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i)); };
-    text(0, "RIFF"); view.setUint32(4, 36 + length * 2, true); text(8, "WAVE");
-    text(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
-    view.setUint32(24, buffer.sampleRate, true); view.setUint32(28, buffer.sampleRate * 2, true);
-    view.setUint16(32, 2, true); view.setUint16(34, 16, true);
-    text(36, "data"); view.setUint32(40, length * 2, true);
-    for (let i = 0, offset = 44; i < length; i++, offset += 2) {
-      const s = Math.max(-1, Math.min(1, samples[i]));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    }
-    return new Blob([view.buffer], { type: "audio/wav" });
+    const header = new DataView(new ArrayBuffer(44));
+    const text = (offset, value) => { for (let i = 0; i < value.length; i++) header.setUint8(offset + i, value.charCodeAt(i)); };
+    text(0, "RIFF"); header.setUint32(4, 36 + length * 2, true); text(8, "WAVE");
+    text(12, "fmt "); header.setUint32(16, 16, true); header.setUint16(20, 1, true); header.setUint16(22, 1, true);
+    header.setUint32(24, buffer.sampleRate, true); header.setUint32(28, buffer.sampleRate * 2, true);
+    header.setUint16(32, 2, true); header.setUint16(34, 16, true);
+    text(36, "data"); header.setUint32(40, length * 2, true);
+    // Samples go in as little-endian Int16 (every target platform is little-endian); the Blob joins the
+    // two parts without a second full-size copy, which matters for tracks of many minutes.
+    const pcm = new Int16Array(length);
+    for (let i = 0; i < length; i++) { const s = Math.max(-1, Math.min(1, samples[i])); pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff; }
+    return new Blob([header.buffer, pcm.buffer], { type: "audio/wav" });
   }
   // Render a track descriptor from RehabCore into a playable blob URL.
   async function render(track, clips) {
@@ -892,7 +1049,7 @@ globalThis.RehabAudio = (() => {
         for (const [frequency, offset, duration, type, gain] of TONES[event.tone] || []) note(context, out, frequency, Math.max(0, event.at + offset), duration, type, gain);
       }
     }
-    const rendered = await startRendering(context);
+    const rendered = await within(startRendering(context), 60000, "render");
     const blob = encodeWav(rendered);
     return { url: URL.createObjectURL(blob), duration: rendered.length / RATE, bytes: blob.size };
   }
@@ -929,12 +1086,38 @@ globalThis.RehabStore = (() => {
     };
     const emit = () => { for (const listener of listeners) { try { listener(); } catch { /* listener errors stay local */ } } };
 
-    // Preferences shared by both plans on this device.
-    function prefs() {
-      const value = read(`${ns}:prefs`, {}) || {};
-      return { groupRest: [60, 90, 120, 150].includes(value.groupRest) ? value.groupRest : 60, sound: value.sound !== false };
+    // Preferences on this device. Sound is shared; training settings are kept per plan as overrides
+    // of the plan's own numbers, so only what the user changed is stored. Validation of the values
+    // belongs to the domain code (RehabCore.normalize); this only keeps the shape sane.
+    const rawPrefs = () => { const value = read(`${ns}:prefs`, {}); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; };
+    function prefs() { return { sound: rawPrefs().sound !== false }; }
+    function setPrefs(patch) { return write(`${ns}:prefs`, { ...rawPrefs(), ...patch }); }
+    function cleanOverrides(value) {
+      const result = {};
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        for (const [key, number] of Object.entries(value)) if (/^[a-zA-Z]{1,16}$/.test(key) && Number.isFinite(number)) result[key] = number;
+      }
+      return result;
     }
-    function setPrefs(patch) { return write(`${ns}:prefs`, { ...prefs(), ...patch }); }
+    // The group rest used to be one shared preference; it still applies until a plan is adjusted.
+    function planSettings(program) {
+      const value = rawPrefs();
+      const legacy = Number.isFinite(value.groupRest) ? { groupRest: value.groupRest } : {};
+      return { ...legacy, ...cleanOverrides(value.plans?.[program]) };
+    }
+    function setPlanSettings(program, overrides) {
+      if (!PROGRAMS.includes(program)) return false;
+      const value = rawPrefs();
+      const plans = { ...(value.plans && typeof value.plans === "object" ? value.plans : {}) };
+      const clean = cleanOverrides(overrides);
+      if (Object.keys(clean).length) plans[program] = clean; else delete plans[program];
+      // The legacy shared group rest moves into each plan, so "恢复默认" on one plan really restores its defaults.
+      const { groupRest: legacy, ...rest } = value;
+      if (Number.isFinite(legacy)) {
+        for (const other of PROGRAMS) if (other !== program && !(plans[other] && "groupRest" in plans[other])) plans[other] = { ...cleanOverrides(plans[other]), groupRest: legacy };
+      }
+      return write(`${ns}:prefs`, { ...rest, plans });
+    }
 
     // One resumable session per plan.
     const progress = program => read(`${ns}:progress:${program}`);
@@ -1118,7 +1301,7 @@ globalThis.RehabStore = (() => {
       return refresh().then(() => flush());
     }
     return Object.freeze({
-      ns, isolated, prefs, setPrefs, progress, saveProgress, clearProgress, list, complete, addManual, revoke,
+      ns, isolated, prefs, setPrefs, planSettings, setPlanSettings, progress, saveProgress, clearProgress, list, complete, addManual, revoke,
       refresh, flush, init, pending: () => outbox().length,
       onChange(listener) { listeners.add(listener); return () => listeners.delete(listener); }
     });
@@ -1137,7 +1320,9 @@ globalThis.RehabStore = (() => {
   const isolated = fileMode || testMode || debugMs > 0;
   const unit = debugMs > 0 ? debugMs : 1000; // milliseconds per training second (wall clock only)
   const clips = globalThis.RehabVoice?.clips || {};
-  const VOICE_URL = `audio/voice.wav?v=${globalThis.RehabVoice?.version || "0"}`;
+  const voiceVersion = globalThis.RehabVoice?.version || "0";
+  // The small AAC copy is tried first; the WAV is the exact fallback.
+  const VOICE_URLS = [globalThis.RehabVoice?.compact && `audio/${RehabVoice.compact.file}?v=${voiceVersion}`, `audio/voice.wav?v=${voiceVersion}`].filter(Boolean);
   const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
   function memoryStorage() {
@@ -1152,7 +1337,7 @@ globalThis.RehabStore = (() => {
 
   const ui = {
     screen: "home", plan: Core.PLAN_A, session: null,
-    voice: debugMs ? "off" : "loading", forceSilent: debugMs > 0,
+    voice: debugMs ? "off" : "loading", forceSilent: debugMs > 0, voiceStart: 0, voiceBytes: 0, voiceTotal: 0, voiceDrawn: 0, voiceTimer: 0,
     clock: { kind: null, t0: 0 }, expectingPause: false, lastMediaTime: 0, lastProgressAt: 0, lastSaveAt: 0,
     tracks: new Map(), playingUrl: null, loop: null, lockUntil: 0, wakeLock: null,
     elapsedStart: null, elapsedMs: null, lastCompletion: null, sheetFrom: null,
@@ -1178,30 +1363,71 @@ globalThis.RehabStore = (() => {
   const todayKey = () => Core.localDate(today());
   const dateLabel = key => { const [y, m, d] = key.split("-").map(Number); const date = new Date(y, m - 1, d, 12); return `${m} 月 ${d} 日 周${WEEKDAYS[date.getDay()]}`; };
   const clockText = seconds => seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}` : String(Math.max(1, Math.ceil(seconds - 1e-6)));
-  const minutes = planId => Math.round(Core.doseSeconds(planId, store.prefs().groupRest) / 60);
+  // The numbers a new session of this plan would use: the plan's own, with the user's adjustments on top.
+  const configFor = planId => Core.normalize(planId, store.planSettings(planId));
+  const minutes = planId => Math.round(Core.doseSeconds(planId, configFor(planId)) / 60);
   const locked = () => performance.now() < ui.lockUntil;
   const lockTaps = () => { ui.lockUntil = performance.now() + 700; };
   function note(el, message) { setText(el, message || ""); show(el, Boolean(message)); }
 
+  // ---------- voice file ----------
+  const SLOW_VOICE_MS = 4000; // after this long, offer to start without sound
+  function loadVoice() {
+    if (debugMs) return;
+    if (!Sound.supported()) { ui.voice = "off"; return; }
+    ui.voice = "loading"; ui.voiceStart = performance.now(); ui.voiceBytes = 0; ui.voiceTotal = 0;
+    clearTimeout(ui.voiceTimer); ui.voiceTimer = setTimeout(refresh, SLOW_VOICE_MS + 100);
+    const onProgress = (bytes, total) => {
+      ui.voiceBytes = bytes; ui.voiceTotal = total;
+      if (performance.now() - ui.voiceDrawn > 400) { ui.voiceDrawn = performance.now(); refresh(); }
+    };
+    Sound.load(VOICE_URLS, { onProgress, samples: globalThis.RehabVoice?.samples }).then(() => { ui.voice = "ready"; refresh(); }).catch(() => { ui.voice = "off"; refresh(); });
+  }
+  // What the page tells the user about the voice file, and the one action that helps.
+  function voiceStatus() {
+    if (debugMs) return { message: "", action: null };
+    if (ui.voice === "loading" && !ui.forceSilent) {
+      if (performance.now() - ui.voiceStart < SLOW_VOICE_MS) return { message: "", action: null };
+      const size = ui.voiceTotal > 0 && ui.voiceBytes <= ui.voiceTotal ? `${Math.round(ui.voiceBytes / ui.voiceTotal * 100)}%` : `${(ui.voiceBytes / 1048576).toFixed(1)} MB`;
+      return { message: `声音正在下载（${size}），网络慢时要等一会儿。`, action: ["不等了，静音开始", () => { ui.forceSilent = true; refresh(); }] };
+    }
+    if (ui.voice === "off") {
+      return { message: "声音没有加载成功，这次会静音计时。", action: Sound.supported() ? ["重新下载声音", () => { ui.forceSilent = false; loadVoice(); refresh(); }] : null };
+    }
+    return { message: ui.forceSilent ? "这次静音计时。" : "", action: null };
+  }
+  function renderVoiceAction(id, action) {
+    const el = $(id);
+    show(el, Boolean(action));
+    if (!action) return;
+    setText(el, action[0]);
+    el.onclick = action[1];
+  }
+
   // ---------- audio tracks ----------
   const audioMode = () => (!ui.forceSilent && ui.voice === "ready" && Sound.supported()) ? "media" : "wall";
-  const trackKey = track => `${track.mode}:${track.plan}:${track.index}:${track.start}:${track.duration.toFixed(3)}`;
+  const MAX_CACHED_TRACKS = 6, MAX_CACHED_BYTES = 200 * 1048576; // long tracks are tens of MB each
   function prepare(track) {
     if (!track || audioMode() !== "media") return null;
-    const key = trackKey(track);
+    const key = track.key;
     let entry = ui.tracks.get(key);
     if (!entry) {
       entry = { key, result: null, failed: false };
-      entry.promise = Sound.render(track, clips).then(result => { entry.result = result; refresh(); return result; }).catch(() => { entry.failed = true; refresh(); });
+      entry.promise = Sound.render(track, clips).then(result => { entry.result = result; trimTracks(); refresh(); return result; }).catch(() => { entry.failed = true; refresh(); });
       ui.tracks.set(key, entry);
-      while (ui.tracks.size > 6) {
-        const [oldKey, old] = ui.tracks.entries().next().value;
-        if (old.result?.url === ui.playingUrl) { ui.tracks.delete(oldKey); ui.tracks.set(oldKey, old); break; }
-        if (old.result) URL.revokeObjectURL(old.result.url);
-        ui.tracks.delete(oldKey);
-      }
+      trimTracks();
     }
     return entry;
+  }
+  // Keep the newest tracks within a count and memory budget, never dropping the one that is playing.
+  function trimTracks() {
+    const bytes = () => [...ui.tracks.values()].reduce((sum, entry) => sum + (entry.result?.bytes || 0), 0);
+    while (ui.tracks.size > MAX_CACHED_TRACKS || bytes() > MAX_CACHED_BYTES) {
+      const oldest = [...ui.tracks.entries()].find(([, entry]) => entry.result && entry.result.url !== ui.playingUrl);
+      if (!oldest) break;
+      URL.revokeObjectURL(oldest[1].result.url);
+      ui.tracks.delete(oldest[0]);
+    }
   }
   // Ready means the next tap can call play() synchronously inside the gesture.
   function trackReady(track) {
@@ -1387,7 +1613,7 @@ globalThis.RehabStore = (() => {
     if (session) {
       const line = document.createElement("p"); line.className = "resume-line";
       line.append("上次练到 ");
-      const b = document.createElement("b"); b.textContent = session.state === "between" ? `第 ${session.item + 1} 项开始前` : Core.describePlace(planId, session.item, session.at, session.groupRest);
+      const b = document.createElement("b"); b.textContent = session.state === "between" ? `第 ${session.item + 1} 项开始前` : Core.describePlace(planId, session.item, session.at, session.config);
       line.append(b);
       card.append(top, pics, line);
       const restart = button("从头开始", "link-button", () => openPrep(planId));
@@ -1421,48 +1647,104 @@ globalThis.RehabStore = (() => {
 
   // ---------- prep ----------
   function openPrep(planId) { ui.plan = planId; ui.prepConfirm = false; go("prep"); }
-  function prepTrack() { return Core.buildTrack(Core.compile(ui.plan, 0, store.prefs().groupRest), 0, "start"); }
+
+  // Training settings: one stepper per adjustable number, saved per plan on this device.
+  const PARAM_HINTS = {
+    [Core.PLAN_A]: "组数和次数用于前四项；第 5 项（踮脚、拉伸）用最后四行。项间休息选“不休息”时，每项结束后等你点击再开始下一项。",
+    [Core.PLAN_B]: "组数也用于第 5 项（不计时）；次数、保持和休息用于前四项。项间休息选“不休息”时，每项结束后等你点击再开始下一项。"
+  };
+  function buildParams() {
+    ui.paramsPlan = ui.plan;
+    $("paramRows").replaceChildren(...Core.fieldKeys(ui.plan).map(key => {
+      const field = Core.FIELDS[key];
+      const row = document.createElement("div"); row.className = "param-row"; row.dataset.key = key;
+      const label = document.createElement("span"); label.className = "param-label"; label.id = `param-${key}`; label.textContent = field.label;
+      const stepper = document.createElement("div"); stepper.className = "stepper"; stepper.setAttribute("role", "group"); stepper.setAttribute("aria-labelledby", label.id);
+      const minus = button("−", "", () => stepParam(key, -1)); minus.setAttribute("aria-label", `减少${field.label}`);
+      const value = document.createElement("output");
+      const plus = button("+", "", () => stepParam(key, 1)); plus.setAttribute("aria-label", `增加${field.label}`);
+      stepper.append(minus, value, plus);
+      row.append(label, stepper);
+      return row;
+    }));
+    setText($("paramsHint"), PARAM_HINTS[ui.plan]);
+  }
+  function syncParams() {
+    if (ui.paramsPlan !== ui.plan) buildParams();
+    const cfg = configFor(ui.plan), changed = Core.changedKeys(ui.plan, cfg);
+    let capped = false;
+    for (const row of $("paramRows").children) {
+      const key = row.dataset.key, all = Core.FIELDS[key].values, choices = Core.choices(ui.plan, cfg, key), at = choices.indexOf(cfg[key]);
+      const [minus, output, plus] = row.querySelector(".stepper").children;
+      setText(output, Core.FIELDS[key].format(cfg[key]));
+      minus.disabled = at <= 0;
+      plus.disabled = at >= choices.length - 1;
+      if (plus.disabled && all.indexOf(cfg[key]) < all.length - 1) capped = true;
+      row.classList.toggle("changed", changed.includes(key));
+    }
+    setText($("paramsSummary"), `${cfg.sets} 组 × ${cfg.reps} 次 · 保持 ${cfg.hold} 秒 · ${changed.length ? "已调整" : "默认"}`);
+    show($("paramsReset"), changed.length > 0);
+    note($("paramsCap"), capped ? `单项最长 ${Core.MAX_ITEM_SECONDS / 60} 分钟，再增加会超过，所以不能继续调大。` : "");
+    return cfg;
+  }
+  function saveConfig(cfg) {
+    const overrides = {};
+    for (const key of Core.changedKeys(ui.plan, cfg)) overrides[key] = cfg[key];
+    store.setPlanSettings(ui.plan, overrides);
+    ui.prepConfirm = false;
+    settlePrep(); refresh();
+  }
+  function stepParam(key, direction) {
+    const cfg = configFor(ui.plan), choices = Core.choices(ui.plan, cfg, key);
+    const next = choices[choices.indexOf(cfg[key]) + direction];
+    if (next !== undefined) saveConfig({ ...cfg, [key]: next });
+  }
+  // Voice tracks are rendered only once the user stops tapping, so rapid steps do not queue renders.
+  function settlePrep() {
+    ui.prepSettling = true;
+    clearTimeout(ui.prepTimer);
+    ui.prepTimer = setTimeout(() => { ui.prepSettling = false; if (ui.screen === "prep") refresh(); }, 400);
+  }
+  function prepTrack() { return Core.buildTrack(Core.compile(ui.plan, 0, configFor(ui.plan)), 0, "start"); }
   function renderPrep() {
-    const plan = Core.PLANS[ui.plan], prefs = store.prefs();
+    const plan = Core.PLANS[ui.plan];
+    const cfg = syncParams();
     setText($("prepTitle"), plan.name);
     setText($("prepMeta"), `${plan.items.length} 项 · 约 ${minutes(ui.plan)} 分钟${plan.items.some(i => i.type === "manual") ? "，另有 1 项不计时" : ""}`);
     const tools = [...new Set(plan.items.flatMap(item => item.tools))];
     $("prepTools").replaceChildren(...(tools.length ? tools : ["不需要额外器材"]).map(text => { const c = document.createElement("span"); c.className = tools.length ? "chip tool" : "chip"; c.textContent = text; return c; }));
-    $("prepItems").replaceChildren(...plan.items.map(item => {
+    $("prepItems").replaceChildren(...Core.itemsFor(ui.plan, cfg).map(item => {
       const li = document.createElement("li");
       li.insertAdjacentHTML("beforeend", artHtml(item));
       const text = document.createElement("div");
       const b = document.createElement("b"); b.textContent = item.name;
-      const dose = document.createElement("small"); dose.textContent = `${Core.itemDose(item)}${item.type === "hold" ? `，每次间休息 ${item.rest} 秒` : item.type === "rounds" ? `，前三轮后各休息 ${item.roundRest} 秒` : ""}`;
+      const dose = document.createElement("small"); const restNote = item.type === "hold" && item.reps > 1 ? `每次间休息 ${item.rest} 秒` : item.type === "rounds" && item.rounds > 1 ? `每轮之间休息 ${item.roundRest} 秒` : ""; dose.textContent = `${Core.itemDose(item)}${restNote ? `，${restNote}` : ""}`;
       text.append(b, dose);
       if (item.equipment) { const extra = document.createElement("small"); extra.textContent = `器材：${item.equipment}`; text.append(extra); }
       li.append(text);
       return li;
     }));
-    $("restOptions").replaceChildren(...Core.GROUP_REST_OPTIONS.map(seconds => {
-      const el = button(Core.GROUP_REST_LABELS[seconds], "", () => { store.setPrefs({ groupRest: seconds }); refresh(); });
-      el.setAttribute("role", "radio"); el.setAttribute("aria-checked", String(prefs.groupRest === seconds));
-      return el;
-    }));
     const progress = restoreSession(ui.plan);
     let message = "";
-    if (progress) message = `这套计划上次练到${progress.state === "between" ? `第 ${progress.item + 1} 项开始前` : Core.describePlace(ui.plan, progress.item, progress.at, progress.groupRest)}。从这里开始会从头练，那次进度会被放弃。`;
-    if (ui.voice === "off" && !debugMs) message = [message, "声音没有加载成功，这次会静音计时。"].filter(Boolean).join("\n");
+    if (progress) message = `这套计划上次练到${progress.state === "between" ? `第 ${progress.item + 1} 项开始前` : Core.describePlace(ui.plan, progress.item, progress.at, progress.config)}。从这里开始会从头练，那次进度会被放弃。`;
+    const voice = voiceStatus();
+    message = [message, voice.message].filter(Boolean).join("\n");
     note($("prepNotice"), message);
-    const ready = trackReady(prepTrack());
-    trackReady(Core.testTrack());
+    renderVoiceAction("prepVoiceAction", voice.action);
+    const ready = !ui.prepSettling && trackReady(prepTrack());
+    if (!ui.prepSettling) trackReady(Core.testTrack());
     const start = $("prepStart");
     start.disabled = !ready;
     start.classList.toggle("confirm", ui.prepConfirm);
     setText(start, !ready ? "正在准备声音…" : ui.prepConfirm ? "确认从头开始" : "开始训练");
-    $("prepTest").disabled = audioMode() !== "media" || !trackReady(Core.testTrack());
+    $("prepTest").disabled = ui.prepSettling || audioMode() !== "media" || !trackReady(Core.testTrack());
   }
   function startNew() {
     if (locked()) return;
     const progress = restoreSession(ui.plan);
     if (progress && !ui.prepConfirm) { ui.prepConfirm = true; renderPrep(); return; }
     if (ui.session) { save(true); ui.session = null; }
-    const session = new Core.Session({ plan: ui.plan, groupRest: store.prefs().groupRest, id: uuid() });
+    const session = new Core.Session({ plan: ui.plan, config: configFor(ui.plan), id: uuid() });
     ui.session = session;
     if (!beginPrimary(session.pendingTrack())) { ui.session = null; renderPrep(); return; }
     ui.elapsedStart = Date.now(); ui.elapsedMs = null; ui.prepConfirm = false; lockTaps();
@@ -1475,6 +1757,18 @@ globalThis.RehabStore = (() => {
     if (el.dataset.key === key) return;
     el.dataset.key = key;
     el.replaceChildren(...Array.from({ length: total }, (_, i) => { const d = document.createElement("i"); if (i < done) d.className = "d"; else if (i === current) d.className = "c"; return d; }));
+  }
+  // One row of dots per set (or a single row of rounds); rows other than the active one are dimmed.
+  function dotStack(el, rows, active) {
+    const key = JSON.stringify([rows, active]);
+    if (el.dataset.key === key) return;
+    el.dataset.key = key;
+    el.replaceChildren(...rows.map(([total, done, current], row) => {
+      const line = document.createElement("div");
+      line.className = row === active ? "dots" : "dots dim";
+      line.replaceChildren(...Array.from({ length: total }, (_, i) => { const d = document.createElement("i"); if (i < done) d.className = "d"; else if (i === current) d.className = "c"; return d; }));
+      return line;
+    }));
   }
   function phaseFor(segment, item) {
     switch (segment.kind) {
@@ -1523,12 +1817,10 @@ globalThis.RehabStore = (() => {
       const inRest = place.phase === "segment" && segment.kind !== "work";
       const doneCount = segment.kind === "work" && place.phase === "segment" ? rep - 1 : segment.kind === "group-rest" ? item.reps : inRest ? rep : Math.max(0, rep - 1);
       const current = segment.kind === "group-rest" ? -1 : segment.kind === "work" ? rep - 1 : rep;
-      dots($("runDots"), item.reps, set === 1 ? doneCount : item.reps, set === 1 ? current : -1);
-      dots($("runDots2"), item.reps, set === 2 ? doneCount : 0, set === 2 ? current : -1);
+      dotStack($("runDots"), Array.from({ length: item.sets }, (_, i) => i + 1 < set ? [item.reps, item.reps, -1] : i + 1 === set ? [item.reps, doneCount, current] : [item.reps, 0, -1]), set - 1);
     } else if (item.type === "rounds") {
       const round = segment.round || 0;
-      dots($("runDots"), item.rounds, segment.kind === "round-rest" ? round : Math.max(0, round - 1), segment.kind === "round-rest" ? -1 : round - 1);
-      $("runDots2").replaceChildren(); $("runDots2").dataset.key = "";
+      dotStack($("runDots"), [[item.rounds, segment.kind === "round-rest" ? round : Math.max(0, round - 1), segment.kind === "round-rest" ? -1 : round - 1]], 0);
     }
     // Skip only where the plan allows it, and only once the skip track can play from this tap.
     const canSkip = place.phase === "segment" && s.canSkip(t);
@@ -1578,7 +1870,7 @@ globalThis.RehabStore = (() => {
       show($("holdMark"), true); show($("holdArt"), false); show($("holdImg"), false);
       setText($("holdPhase"), "已暂停");
       const segment = Core.segmentAt(s.compiled(), s.at);
-      setText($("holdSub"), segment ? `${Core.describePlace(s.plan, s.item, s.at, s.groupRest)}${segment.rep ? ` · 第 ${segment.rep} 次` : ""}` : "");
+      setText($("holdSub"), segment ? `${Core.describePlace(s.plan, s.item, s.at, s.config)}${segment.rep ? ` · 第 ${segment.rep} 次` : ""}` : "");
       setText($("holdNote"), segment && Core.WORK_KINDS.has(segment.kind) ? "继续时，这一次从头开始，先倒数 4 秒。" : "继续时，从暂停的地方接着计时。");
       const ready = trackReady(s.pendingTrack());
       primary.disabled = !ready;
@@ -1595,14 +1887,14 @@ globalThis.RehabStore = (() => {
       show($("holdDots"), true); dots($("holdDots"), item.sets, s.set - 1, s.set - 1);
       primary.disabled = false; setText(primary, `完成第 ${s.set} 组`);
       show(secondary, false);
-      if (s.set === 2) trackReady(Core.finishTrack());
+      if (s.set === item.sets) trackReady(Core.finishTrack());
     } else if (s.state === "manual-ready") {
-      setText($("holdPhase"), "第 1 组完成");
-      setText($("holdSub"), "歇一下，准备好后开始第 2 组");
+      setText($("holdPhase"), `第 ${s.set - 1} 组完成`);
+      setText($("holdSub"), `歇一下，准备好后开始第 ${s.set} 组`);
       setText($("holdNote"), item.name);
-      show($("holdDots"), true); dots($("holdDots"), item.sets, 1, -1);
+      show($("holdDots"), true); dots($("holdDots"), item.sets, s.set - 1, -1);
       const ready = trackReady(s.pendingTrack());
-      primary.disabled = !ready; setText(primary, ready ? "开始第 2 组" : "正在准备声音…");
+      primary.disabled = !ready; setText(primary, ready ? `开始第 ${s.set} 组` : "正在准备声音…");
       show(secondary, false);
     }
   }
@@ -1633,12 +1925,14 @@ globalThis.RehabStore = (() => {
     $("betweenBox").classList.toggle("photo", Boolean(item.image));
     setText($("betweenName"), item.name);
     $("betweenChips").replaceChildren(...[...item.tools.map(t => ["chip tool", t]), ["chip", Core.itemDose(item)]].map(([cls, text]) => { const c = document.createElement("span"); c.className = cls; c.textContent = text; return c; }));
-    setText($("betweenRest"), [item.equipment && item.equipment !== item.tools[0] ? `器材：${item.equipment}` : "", Core.itemRestNote(item, s.groupRest)].filter(Boolean).join(" · "));
+    setText($("betweenRest"), [item.equipment && item.equipment !== item.tools[0] ? `器材：${item.equipment}` : "", Core.itemRestNote(item, s.config)].filter(Boolean).join(" · "));
     setText($("betweenHint"), item.type === "manual" ? "不计时，做完一组点一次完成" : `点击后有 ${Core.SETTLE_SECONDS} 秒就位倒数`);
     const ready = trackReady(s.pendingTrack());
     const start = $("betweenStart");
     start.disabled = !ready; setText(start, ready ? "准备好了，开始" : "正在准备声音…");
-    note($("betweenNotice"), ui.voice === "off" && !debugMs ? "声音没有加载成功，这次会静音计时。" : "");
+    const voice = voiceStatus();
+    note($("betweenNotice"), voice.message);
+    renderVoiceAction("betweenVoiceAction", voice.action);
   }
 
   // ---------- done ----------
@@ -1757,6 +2051,7 @@ globalThis.RehabStore = (() => {
   on("tabRecords", () => { ui.month = null; ui.selected = null; ui.manualOpen = false; go("records"); });
   on("prepBack", () => go("home"));
   on("prepStart", startNew);
+  on("paramsReset", () => { store.setPlanSettings(ui.plan, {}); ui.prepConfirm = false; settlePrep(); refresh(); });
   on("prepSound", toggleSound);
   on("prepTest", testSound);
   on("runPause", () => { if (!locked()) pauseNow(); });
@@ -1811,8 +2106,7 @@ globalThis.RehabStore = (() => {
     setText($("testBadge"), parts.join(" · ")); show($("testBadge"), true);
   }
   if (!debugMs) {
-    if (!Sound.supported()) ui.voice = "off";
-    else Sound.load(VOICE_URL).then(() => { ui.voice = "ready"; refresh(); }).catch(() => { ui.voice = "off"; refresh(); });
+    loadVoice();
   }
   store.init().catch(() => {});
   go("home");

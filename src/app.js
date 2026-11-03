@@ -10,7 +10,9 @@
   const isolated = fileMode || testMode || debugMs > 0;
   const unit = debugMs > 0 ? debugMs : 1000; // milliseconds per training second (wall clock only)
   const clips = globalThis.RehabVoice?.clips || {};
-  const VOICE_URL = `audio/voice.wav?v=${globalThis.RehabVoice?.version || "0"}`;
+  const voiceVersion = globalThis.RehabVoice?.version || "0";
+  // The small AAC copy is tried first; the WAV is the exact fallback.
+  const VOICE_URLS = [globalThis.RehabVoice?.compact && `audio/${RehabVoice.compact.file}?v=${voiceVersion}`, `audio/voice.wav?v=${voiceVersion}`].filter(Boolean);
   const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
   function memoryStorage() {
@@ -25,7 +27,7 @@
 
   const ui = {
     screen: "home", plan: Core.PLAN_A, session: null,
-    voice: debugMs ? "off" : "loading", forceSilent: debugMs > 0,
+    voice: debugMs ? "off" : "loading", forceSilent: debugMs > 0, voiceStart: 0, voiceBytes: 0, voiceTotal: 0, voiceDrawn: 0, voiceTimer: 0,
     clock: { kind: null, t0: 0 }, expectingPause: false, lastMediaTime: 0, lastProgressAt: 0, lastSaveAt: 0,
     tracks: new Map(), playingUrl: null, loop: null, lockUntil: 0, wakeLock: null,
     elapsedStart: null, elapsedMs: null, lastCompletion: null, sheetFrom: null,
@@ -51,30 +53,71 @@
   const todayKey = () => Core.localDate(today());
   const dateLabel = key => { const [y, m, d] = key.split("-").map(Number); const date = new Date(y, m - 1, d, 12); return `${m} 月 ${d} 日 周${WEEKDAYS[date.getDay()]}`; };
   const clockText = seconds => seconds >= 60 ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}` : String(Math.max(1, Math.ceil(seconds - 1e-6)));
-  const minutes = planId => Math.round(Core.doseSeconds(planId, store.prefs().groupRest) / 60);
+  // The numbers a new session of this plan would use: the plan's own, with the user's adjustments on top.
+  const configFor = planId => Core.normalize(planId, store.planSettings(planId));
+  const minutes = planId => Math.round(Core.doseSeconds(planId, configFor(planId)) / 60);
   const locked = () => performance.now() < ui.lockUntil;
   const lockTaps = () => { ui.lockUntil = performance.now() + 700; };
   function note(el, message) { setText(el, message || ""); show(el, Boolean(message)); }
 
+  // ---------- voice file ----------
+  const SLOW_VOICE_MS = 4000; // after this long, offer to start without sound
+  function loadVoice() {
+    if (debugMs) return;
+    if (!Sound.supported()) { ui.voice = "off"; return; }
+    ui.voice = "loading"; ui.voiceStart = performance.now(); ui.voiceBytes = 0; ui.voiceTotal = 0;
+    clearTimeout(ui.voiceTimer); ui.voiceTimer = setTimeout(refresh, SLOW_VOICE_MS + 100);
+    const onProgress = (bytes, total) => {
+      ui.voiceBytes = bytes; ui.voiceTotal = total;
+      if (performance.now() - ui.voiceDrawn > 400) { ui.voiceDrawn = performance.now(); refresh(); }
+    };
+    Sound.load(VOICE_URLS, { onProgress, samples: globalThis.RehabVoice?.samples }).then(() => { ui.voice = "ready"; refresh(); }).catch(() => { ui.voice = "off"; refresh(); });
+  }
+  // What the page tells the user about the voice file, and the one action that helps.
+  function voiceStatus() {
+    if (debugMs) return { message: "", action: null };
+    if (ui.voice === "loading" && !ui.forceSilent) {
+      if (performance.now() - ui.voiceStart < SLOW_VOICE_MS) return { message: "", action: null };
+      const size = ui.voiceTotal > 0 && ui.voiceBytes <= ui.voiceTotal ? `${Math.round(ui.voiceBytes / ui.voiceTotal * 100)}%` : `${(ui.voiceBytes / 1048576).toFixed(1)} MB`;
+      return { message: `声音正在下载（${size}），网络慢时要等一会儿。`, action: ["不等了，静音开始", () => { ui.forceSilent = true; refresh(); }] };
+    }
+    if (ui.voice === "off") {
+      return { message: "声音没有加载成功，这次会静音计时。", action: Sound.supported() ? ["重新下载声音", () => { ui.forceSilent = false; loadVoice(); refresh(); }] : null };
+    }
+    return { message: ui.forceSilent ? "这次静音计时。" : "", action: null };
+  }
+  function renderVoiceAction(id, action) {
+    const el = $(id);
+    show(el, Boolean(action));
+    if (!action) return;
+    setText(el, action[0]);
+    el.onclick = action[1];
+  }
+
   // ---------- audio tracks ----------
   const audioMode = () => (!ui.forceSilent && ui.voice === "ready" && Sound.supported()) ? "media" : "wall";
-  const trackKey = track => `${track.mode}:${track.plan}:${track.index}:${track.start}:${track.duration.toFixed(3)}`;
+  const MAX_CACHED_TRACKS = 6, MAX_CACHED_BYTES = 200 * 1048576; // long tracks are tens of MB each
   function prepare(track) {
     if (!track || audioMode() !== "media") return null;
-    const key = trackKey(track);
+    const key = track.key;
     let entry = ui.tracks.get(key);
     if (!entry) {
       entry = { key, result: null, failed: false };
-      entry.promise = Sound.render(track, clips).then(result => { entry.result = result; refresh(); return result; }).catch(() => { entry.failed = true; refresh(); });
+      entry.promise = Sound.render(track, clips).then(result => { entry.result = result; trimTracks(); refresh(); return result; }).catch(() => { entry.failed = true; refresh(); });
       ui.tracks.set(key, entry);
-      while (ui.tracks.size > 6) {
-        const [oldKey, old] = ui.tracks.entries().next().value;
-        if (old.result?.url === ui.playingUrl) { ui.tracks.delete(oldKey); ui.tracks.set(oldKey, old); break; }
-        if (old.result) URL.revokeObjectURL(old.result.url);
-        ui.tracks.delete(oldKey);
-      }
+      trimTracks();
     }
     return entry;
+  }
+  // Keep the newest tracks within a count and memory budget, never dropping the one that is playing.
+  function trimTracks() {
+    const bytes = () => [...ui.tracks.values()].reduce((sum, entry) => sum + (entry.result?.bytes || 0), 0);
+    while (ui.tracks.size > MAX_CACHED_TRACKS || bytes() > MAX_CACHED_BYTES) {
+      const oldest = [...ui.tracks.entries()].find(([, entry]) => entry.result && entry.result.url !== ui.playingUrl);
+      if (!oldest) break;
+      URL.revokeObjectURL(oldest[1].result.url);
+      ui.tracks.delete(oldest[0]);
+    }
   }
   // Ready means the next tap can call play() synchronously inside the gesture.
   function trackReady(track) {
@@ -260,7 +303,7 @@
     if (session) {
       const line = document.createElement("p"); line.className = "resume-line";
       line.append("上次练到 ");
-      const b = document.createElement("b"); b.textContent = session.state === "between" ? `第 ${session.item + 1} 项开始前` : Core.describePlace(planId, session.item, session.at, session.groupRest);
+      const b = document.createElement("b"); b.textContent = session.state === "between" ? `第 ${session.item + 1} 项开始前` : Core.describePlace(planId, session.item, session.at, session.config);
       line.append(b);
       card.append(top, pics, line);
       const restart = button("从头开始", "link-button", () => openPrep(planId));
@@ -294,48 +337,104 @@
 
   // ---------- prep ----------
   function openPrep(planId) { ui.plan = planId; ui.prepConfirm = false; go("prep"); }
-  function prepTrack() { return Core.buildTrack(Core.compile(ui.plan, 0, store.prefs().groupRest), 0, "start"); }
+
+  // Training settings: one stepper per adjustable number, saved per plan on this device.
+  const PARAM_HINTS = {
+    [Core.PLAN_A]: "组数和次数用于前四项；第 5 项（踮脚、拉伸）用最后四行。项间休息选“不休息”时，每项结束后等你点击再开始下一项。",
+    [Core.PLAN_B]: "组数也用于第 5 项（不计时）；次数、保持和休息用于前四项。项间休息选“不休息”时，每项结束后等你点击再开始下一项。"
+  };
+  function buildParams() {
+    ui.paramsPlan = ui.plan;
+    $("paramRows").replaceChildren(...Core.fieldKeys(ui.plan).map(key => {
+      const field = Core.FIELDS[key];
+      const row = document.createElement("div"); row.className = "param-row"; row.dataset.key = key;
+      const label = document.createElement("span"); label.className = "param-label"; label.id = `param-${key}`; label.textContent = field.label;
+      const stepper = document.createElement("div"); stepper.className = "stepper"; stepper.setAttribute("role", "group"); stepper.setAttribute("aria-labelledby", label.id);
+      const minus = button("−", "", () => stepParam(key, -1)); minus.setAttribute("aria-label", `减少${field.label}`);
+      const value = document.createElement("output");
+      const plus = button("+", "", () => stepParam(key, 1)); plus.setAttribute("aria-label", `增加${field.label}`);
+      stepper.append(minus, value, plus);
+      row.append(label, stepper);
+      return row;
+    }));
+    setText($("paramsHint"), PARAM_HINTS[ui.plan]);
+  }
+  function syncParams() {
+    if (ui.paramsPlan !== ui.plan) buildParams();
+    const cfg = configFor(ui.plan), changed = Core.changedKeys(ui.plan, cfg);
+    let capped = false;
+    for (const row of $("paramRows").children) {
+      const key = row.dataset.key, all = Core.FIELDS[key].values, choices = Core.choices(ui.plan, cfg, key), at = choices.indexOf(cfg[key]);
+      const [minus, output, plus] = row.querySelector(".stepper").children;
+      setText(output, Core.FIELDS[key].format(cfg[key]));
+      minus.disabled = at <= 0;
+      plus.disabled = at >= choices.length - 1;
+      if (plus.disabled && all.indexOf(cfg[key]) < all.length - 1) capped = true;
+      row.classList.toggle("changed", changed.includes(key));
+    }
+    setText($("paramsSummary"), `${cfg.sets} 组 × ${cfg.reps} 次 · 保持 ${cfg.hold} 秒 · ${changed.length ? "已调整" : "默认"}`);
+    show($("paramsReset"), changed.length > 0);
+    note($("paramsCap"), capped ? `单项最长 ${Core.MAX_ITEM_SECONDS / 60} 分钟，再增加会超过，所以不能继续调大。` : "");
+    return cfg;
+  }
+  function saveConfig(cfg) {
+    const overrides = {};
+    for (const key of Core.changedKeys(ui.plan, cfg)) overrides[key] = cfg[key];
+    store.setPlanSettings(ui.plan, overrides);
+    ui.prepConfirm = false;
+    settlePrep(); refresh();
+  }
+  function stepParam(key, direction) {
+    const cfg = configFor(ui.plan), choices = Core.choices(ui.plan, cfg, key);
+    const next = choices[choices.indexOf(cfg[key]) + direction];
+    if (next !== undefined) saveConfig({ ...cfg, [key]: next });
+  }
+  // Voice tracks are rendered only once the user stops tapping, so rapid steps do not queue renders.
+  function settlePrep() {
+    ui.prepSettling = true;
+    clearTimeout(ui.prepTimer);
+    ui.prepTimer = setTimeout(() => { ui.prepSettling = false; if (ui.screen === "prep") refresh(); }, 400);
+  }
+  function prepTrack() { return Core.buildTrack(Core.compile(ui.plan, 0, configFor(ui.plan)), 0, "start"); }
   function renderPrep() {
-    const plan = Core.PLANS[ui.plan], prefs = store.prefs();
+    const plan = Core.PLANS[ui.plan];
+    const cfg = syncParams();
     setText($("prepTitle"), plan.name);
     setText($("prepMeta"), `${plan.items.length} 项 · 约 ${minutes(ui.plan)} 分钟${plan.items.some(i => i.type === "manual") ? "，另有 1 项不计时" : ""}`);
     const tools = [...new Set(plan.items.flatMap(item => item.tools))];
     $("prepTools").replaceChildren(...(tools.length ? tools : ["不需要额外器材"]).map(text => { const c = document.createElement("span"); c.className = tools.length ? "chip tool" : "chip"; c.textContent = text; return c; }));
-    $("prepItems").replaceChildren(...plan.items.map(item => {
+    $("prepItems").replaceChildren(...Core.itemsFor(ui.plan, cfg).map(item => {
       const li = document.createElement("li");
       li.insertAdjacentHTML("beforeend", artHtml(item));
       const text = document.createElement("div");
       const b = document.createElement("b"); b.textContent = item.name;
-      const dose = document.createElement("small"); dose.textContent = `${Core.itemDose(item)}${item.type === "hold" ? `，每次间休息 ${item.rest} 秒` : item.type === "rounds" ? `，前三轮后各休息 ${item.roundRest} 秒` : ""}`;
+      const dose = document.createElement("small"); const restNote = item.type === "hold" && item.reps > 1 ? `每次间休息 ${item.rest} 秒` : item.type === "rounds" && item.rounds > 1 ? `每轮之间休息 ${item.roundRest} 秒` : ""; dose.textContent = `${Core.itemDose(item)}${restNote ? `，${restNote}` : ""}`;
       text.append(b, dose);
       if (item.equipment) { const extra = document.createElement("small"); extra.textContent = `器材：${item.equipment}`; text.append(extra); }
       li.append(text);
       return li;
     }));
-    $("restOptions").replaceChildren(...Core.GROUP_REST_OPTIONS.map(seconds => {
-      const el = button(Core.GROUP_REST_LABELS[seconds], "", () => { store.setPrefs({ groupRest: seconds }); refresh(); });
-      el.setAttribute("role", "radio"); el.setAttribute("aria-checked", String(prefs.groupRest === seconds));
-      return el;
-    }));
     const progress = restoreSession(ui.plan);
     let message = "";
-    if (progress) message = `这套计划上次练到${progress.state === "between" ? `第 ${progress.item + 1} 项开始前` : Core.describePlace(ui.plan, progress.item, progress.at, progress.groupRest)}。从这里开始会从头练，那次进度会被放弃。`;
-    if (ui.voice === "off" && !debugMs) message = [message, "声音没有加载成功，这次会静音计时。"].filter(Boolean).join("\n");
+    if (progress) message = `这套计划上次练到${progress.state === "between" ? `第 ${progress.item + 1} 项开始前` : Core.describePlace(ui.plan, progress.item, progress.at, progress.config)}。从这里开始会从头练，那次进度会被放弃。`;
+    const voice = voiceStatus();
+    message = [message, voice.message].filter(Boolean).join("\n");
     note($("prepNotice"), message);
-    const ready = trackReady(prepTrack());
-    trackReady(Core.testTrack());
+    renderVoiceAction("prepVoiceAction", voice.action);
+    const ready = !ui.prepSettling && trackReady(prepTrack());
+    if (!ui.prepSettling) trackReady(Core.testTrack());
     const start = $("prepStart");
     start.disabled = !ready;
     start.classList.toggle("confirm", ui.prepConfirm);
     setText(start, !ready ? "正在准备声音…" : ui.prepConfirm ? "确认从头开始" : "开始训练");
-    $("prepTest").disabled = audioMode() !== "media" || !trackReady(Core.testTrack());
+    $("prepTest").disabled = ui.prepSettling || audioMode() !== "media" || !trackReady(Core.testTrack());
   }
   function startNew() {
     if (locked()) return;
     const progress = restoreSession(ui.plan);
     if (progress && !ui.prepConfirm) { ui.prepConfirm = true; renderPrep(); return; }
     if (ui.session) { save(true); ui.session = null; }
-    const session = new Core.Session({ plan: ui.plan, groupRest: store.prefs().groupRest, id: uuid() });
+    const session = new Core.Session({ plan: ui.plan, config: configFor(ui.plan), id: uuid() });
     ui.session = session;
     if (!beginPrimary(session.pendingTrack())) { ui.session = null; renderPrep(); return; }
     ui.elapsedStart = Date.now(); ui.elapsedMs = null; ui.prepConfirm = false; lockTaps();
@@ -348,6 +447,18 @@
     if (el.dataset.key === key) return;
     el.dataset.key = key;
     el.replaceChildren(...Array.from({ length: total }, (_, i) => { const d = document.createElement("i"); if (i < done) d.className = "d"; else if (i === current) d.className = "c"; return d; }));
+  }
+  // One row of dots per set (or a single row of rounds); rows other than the active one are dimmed.
+  function dotStack(el, rows, active) {
+    const key = JSON.stringify([rows, active]);
+    if (el.dataset.key === key) return;
+    el.dataset.key = key;
+    el.replaceChildren(...rows.map(([total, done, current], row) => {
+      const line = document.createElement("div");
+      line.className = row === active ? "dots" : "dots dim";
+      line.replaceChildren(...Array.from({ length: total }, (_, i) => { const d = document.createElement("i"); if (i < done) d.className = "d"; else if (i === current) d.className = "c"; return d; }));
+      return line;
+    }));
   }
   function phaseFor(segment, item) {
     switch (segment.kind) {
@@ -396,12 +507,10 @@
       const inRest = place.phase === "segment" && segment.kind !== "work";
       const doneCount = segment.kind === "work" && place.phase === "segment" ? rep - 1 : segment.kind === "group-rest" ? item.reps : inRest ? rep : Math.max(0, rep - 1);
       const current = segment.kind === "group-rest" ? -1 : segment.kind === "work" ? rep - 1 : rep;
-      dots($("runDots"), item.reps, set === 1 ? doneCount : item.reps, set === 1 ? current : -1);
-      dots($("runDots2"), item.reps, set === 2 ? doneCount : 0, set === 2 ? current : -1);
+      dotStack($("runDots"), Array.from({ length: item.sets }, (_, i) => i + 1 < set ? [item.reps, item.reps, -1] : i + 1 === set ? [item.reps, doneCount, current] : [item.reps, 0, -1]), set - 1);
     } else if (item.type === "rounds") {
       const round = segment.round || 0;
-      dots($("runDots"), item.rounds, segment.kind === "round-rest" ? round : Math.max(0, round - 1), segment.kind === "round-rest" ? -1 : round - 1);
-      $("runDots2").replaceChildren(); $("runDots2").dataset.key = "";
+      dotStack($("runDots"), [[item.rounds, segment.kind === "round-rest" ? round : Math.max(0, round - 1), segment.kind === "round-rest" ? -1 : round - 1]], 0);
     }
     // Skip only where the plan allows it, and only once the skip track can play from this tap.
     const canSkip = place.phase === "segment" && s.canSkip(t);
@@ -451,7 +560,7 @@
       show($("holdMark"), true); show($("holdArt"), false); show($("holdImg"), false);
       setText($("holdPhase"), "已暂停");
       const segment = Core.segmentAt(s.compiled(), s.at);
-      setText($("holdSub"), segment ? `${Core.describePlace(s.plan, s.item, s.at, s.groupRest)}${segment.rep ? ` · 第 ${segment.rep} 次` : ""}` : "");
+      setText($("holdSub"), segment ? `${Core.describePlace(s.plan, s.item, s.at, s.config)}${segment.rep ? ` · 第 ${segment.rep} 次` : ""}` : "");
       setText($("holdNote"), segment && Core.WORK_KINDS.has(segment.kind) ? "继续时，这一次从头开始，先倒数 4 秒。" : "继续时，从暂停的地方接着计时。");
       const ready = trackReady(s.pendingTrack());
       primary.disabled = !ready;
@@ -468,14 +577,14 @@
       show($("holdDots"), true); dots($("holdDots"), item.sets, s.set - 1, s.set - 1);
       primary.disabled = false; setText(primary, `完成第 ${s.set} 组`);
       show(secondary, false);
-      if (s.set === 2) trackReady(Core.finishTrack());
+      if (s.set === item.sets) trackReady(Core.finishTrack());
     } else if (s.state === "manual-ready") {
-      setText($("holdPhase"), "第 1 组完成");
-      setText($("holdSub"), "歇一下，准备好后开始第 2 组");
+      setText($("holdPhase"), `第 ${s.set - 1} 组完成`);
+      setText($("holdSub"), `歇一下，准备好后开始第 ${s.set} 组`);
       setText($("holdNote"), item.name);
-      show($("holdDots"), true); dots($("holdDots"), item.sets, 1, -1);
+      show($("holdDots"), true); dots($("holdDots"), item.sets, s.set - 1, -1);
       const ready = trackReady(s.pendingTrack());
-      primary.disabled = !ready; setText(primary, ready ? "开始第 2 组" : "正在准备声音…");
+      primary.disabled = !ready; setText(primary, ready ? `开始第 ${s.set} 组` : "正在准备声音…");
       show(secondary, false);
     }
   }
@@ -506,12 +615,14 @@
     $("betweenBox").classList.toggle("photo", Boolean(item.image));
     setText($("betweenName"), item.name);
     $("betweenChips").replaceChildren(...[...item.tools.map(t => ["chip tool", t]), ["chip", Core.itemDose(item)]].map(([cls, text]) => { const c = document.createElement("span"); c.className = cls; c.textContent = text; return c; }));
-    setText($("betweenRest"), [item.equipment && item.equipment !== item.tools[0] ? `器材：${item.equipment}` : "", Core.itemRestNote(item, s.groupRest)].filter(Boolean).join(" · "));
+    setText($("betweenRest"), [item.equipment && item.equipment !== item.tools[0] ? `器材：${item.equipment}` : "", Core.itemRestNote(item, s.config)].filter(Boolean).join(" · "));
     setText($("betweenHint"), item.type === "manual" ? "不计时，做完一组点一次完成" : `点击后有 ${Core.SETTLE_SECONDS} 秒就位倒数`);
     const ready = trackReady(s.pendingTrack());
     const start = $("betweenStart");
     start.disabled = !ready; setText(start, ready ? "准备好了，开始" : "正在准备声音…");
-    note($("betweenNotice"), ui.voice === "off" && !debugMs ? "声音没有加载成功，这次会静音计时。" : "");
+    const voice = voiceStatus();
+    note($("betweenNotice"), voice.message);
+    renderVoiceAction("betweenVoiceAction", voice.action);
   }
 
   // ---------- done ----------
@@ -630,6 +741,7 @@
   on("tabRecords", () => { ui.month = null; ui.selected = null; ui.manualOpen = false; go("records"); });
   on("prepBack", () => go("home"));
   on("prepStart", startNew);
+  on("paramsReset", () => { store.setPlanSettings(ui.plan, {}); ui.prepConfirm = false; settlePrep(); refresh(); });
   on("prepSound", toggleSound);
   on("prepTest", testSound);
   on("runPause", () => { if (!locked()) pauseNow(); });
@@ -684,8 +796,7 @@
     setText($("testBadge"), parts.join(" · ")); show($("testBadge"), true);
   }
   if (!debugMs) {
-    if (!Sound.supported()) ui.voice = "off";
-    else Sound.load(VOICE_URL).then(() => { ui.voice = "ready"; refresh(); }).catch(() => { ui.voice = "off"; refresh(); });
+    loadVoice();
   }
   store.init().catch(() => {});
   go("home");

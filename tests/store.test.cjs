@@ -159,13 +159,40 @@ test('最初的本机历史只读原始键：被取消的日期不导入，补�
 test('偏好和进度按计划分别保存；坏数据不会让页面出错', () => {
   const storage = new MemoryStorage({ 'rehab:v3:prefs': '{broken' });
   const store = load({ storage, isolated: false, fetch: null });
-  assert.deepEqual(plain(store.prefs()), { groupRest: 60, sound: true });
-  store.setPrefs({ groupRest: 120 });
+  assert.deepEqual(plain(store.prefs()), { sound: true });
+  assert.deepEqual(plain(store.planSettings(A)), {});
   store.setPrefs({ sound: false });
-  assert.deepEqual(plain(store.prefs()), { groupRest: 120, sound: false });
-  store.saveProgress(A, { version: 3, plan: A });
+  assert.deepEqual(plain(store.prefs()), { sound: false });
+  store.saveProgress(A, { version: 4, plan: A });
   assert.equal(store.progress(A).plan, A);
   assert.equal(store.progress(B), null);
   store.clearProgress(A);
   assert.equal(store.progress(A), null);
+});
+
+test('训练参数按计划分别保存，只记改过的项；恢复默认清空；坏数据被忽略', () => {
+  const storage = new MemoryStorage({});
+  const store = load({ storage, isolated: false, fetch: null });
+  assert.equal(store.setPlanSettings(A, { sets: 3, hold: 20, junk: 'x', 'bad key': 1, nan: NaN }), true);
+  assert.deepEqual(plain(store.planSettings(A)), { sets: 3, hold: 20 });
+  assert.deepEqual(plain(store.planSettings(B)), {}, '另一套计划不受影响');
+  store.setPrefs({ sound: false });
+  assert.deepEqual(plain(store.planSettings(A)), { sets: 3, hold: 20 }, '改声音不影响训练参数');
+  assert.equal(store.setPlanSettings('other-plan', { sets: 1 }), false);
+  store.setPlanSettings(A, {});
+  assert.deepEqual(plain(store.planSettings(A)), {});
+  const broken = load({ storage: new MemoryStorage({ 'rehab:v3:prefs': JSON.stringify({ plans: { [A]: 'x', [B]: { sets: [1] } } }) }), isolated: false, fetch: null });
+  assert.deepEqual(plain(broken.planSettings(A)), {});
+  assert.deepEqual(plain(broken.planSettings(B)), {});
+});
+
+test('上一版本的共享组间休息继续生效，调整其中一套时另一套保持原值', () => {
+  const storage = new MemoryStorage({ 'rehab:v3:prefs': JSON.stringify({ groupRest: 120, sound: false }) });
+  const store = load({ storage, isolated: false, fetch: null });
+  assert.deepEqual(plain(store.planSettings(A)), { groupRest: 120 });
+  assert.deepEqual(plain(store.planSettings(B)), { groupRest: 120 });
+  store.setPlanSettings(A, { sets: 3 });
+  assert.deepEqual(plain(store.planSettings(A)), { sets: 3 }, '这套恢复为默认组间休息');
+  assert.deepEqual(plain(store.planSettings(B)), { groupRest: 120 });
+  assert.equal(store.prefs().sound, false);
 });

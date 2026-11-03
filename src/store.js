@@ -29,12 +29,38 @@ globalThis.RehabStore = (() => {
     };
     const emit = () => { for (const listener of listeners) { try { listener(); } catch { /* listener errors stay local */ } } };
 
-    // Preferences shared by both plans on this device.
-    function prefs() {
-      const value = read(`${ns}:prefs`, {}) || {};
-      return { groupRest: [60, 90, 120, 150].includes(value.groupRest) ? value.groupRest : 60, sound: value.sound !== false };
+    // Preferences on this device. Sound is shared; training settings are kept per plan as overrides
+    // of the plan's own numbers, so only what the user changed is stored. Validation of the values
+    // belongs to the domain code (RehabCore.normalize); this only keeps the shape sane.
+    const rawPrefs = () => { const value = read(`${ns}:prefs`, {}); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; };
+    function prefs() { return { sound: rawPrefs().sound !== false }; }
+    function setPrefs(patch) { return write(`${ns}:prefs`, { ...rawPrefs(), ...patch }); }
+    function cleanOverrides(value) {
+      const result = {};
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        for (const [key, number] of Object.entries(value)) if (/^[a-zA-Z]{1,16}$/.test(key) && Number.isFinite(number)) result[key] = number;
+      }
+      return result;
     }
-    function setPrefs(patch) { return write(`${ns}:prefs`, { ...prefs(), ...patch }); }
+    // The group rest used to be one shared preference; it still applies until a plan is adjusted.
+    function planSettings(program) {
+      const value = rawPrefs();
+      const legacy = Number.isFinite(value.groupRest) ? { groupRest: value.groupRest } : {};
+      return { ...legacy, ...cleanOverrides(value.plans?.[program]) };
+    }
+    function setPlanSettings(program, overrides) {
+      if (!PROGRAMS.includes(program)) return false;
+      const value = rawPrefs();
+      const plans = { ...(value.plans && typeof value.plans === "object" ? value.plans : {}) };
+      const clean = cleanOverrides(overrides);
+      if (Object.keys(clean).length) plans[program] = clean; else delete plans[program];
+      // The legacy shared group rest moves into each plan, so "恢复默认" on one plan really restores its defaults.
+      const { groupRest: legacy, ...rest } = value;
+      if (Number.isFinite(legacy)) {
+        for (const other of PROGRAMS) if (other !== program && !(plans[other] && "groupRest" in plans[other])) plans[other] = { ...cleanOverrides(plans[other]), groupRest: legacy };
+      }
+      return write(`${ns}:prefs`, { ...rest, plans });
+    }
 
     // One resumable session per plan.
     const progress = program => read(`${ns}:progress:${program}`);
@@ -218,7 +244,7 @@ globalThis.RehabStore = (() => {
       return refresh().then(() => flush());
     }
     return Object.freeze({
-      ns, isolated, prefs, setPrefs, progress, saveProgress, clearProgress, list, complete, addManual, revoke,
+      ns, isolated, prefs, setPrefs, planSettings, setPlanSettings, progress, saveProgress, clearProgress, list, complete, addManual, revoke,
       refresh, flush, init, pending: () => outbox().length,
       onChange(listener) { listeners.add(listener); return () => listeners.delete(listener); }
     });
