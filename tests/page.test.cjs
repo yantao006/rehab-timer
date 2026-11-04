@@ -49,3 +49,14 @@ test('界面文字不出现同步、云端、口令、登录', () => {
     assert.ok(!strings.includes(word), `app.js: ${word}`);
   }
 });
+
+test('本周圆点按计划区分颜色，并带图例', () => {
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8');
+  assert.match(styles, /\.week i\.on\.a\b/);
+  assert.match(styles, /\.week i\.on\.both\b/);
+  assert.match(app, /"both"/);
+  for (const id of ['homeWeek', 'doneWeek']) {
+    const block = template.slice(template.indexOf(`id="${id}"`));
+    assert.ok(block.slice(0, 400).includes('class="legend"'), `${id} 后面有图例`);
+  }
+});

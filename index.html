@@ -65,6 +65,8 @@ svg { display: block; }
 .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; font-size: .78rem; color: var(--muted); width: 100%; max-width: 420px; }
 .week i { display: block; margin: 4px auto 0; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); }
 .week i.on { background: var(--pool); border-color: var(--pool); }
+.week i.on.a { background: var(--signal); border-color: var(--signal); }
+.week i.on.both { background: linear-gradient(90deg, var(--signal) 50%, var(--pool) 50%); border-color: transparent; }
 .week i.today { border-color: var(--ink); }
 .week i.on.today { box-shadow: inset 0 0 0 2px var(--tile); }
 
@@ -256,6 +258,7 @@ svg { display: block; }
         <h1 id="homeTitle">今天练哪一套？</h1>
         <div class="week" id="homeWeek" aria-label="本周训练"></div>
         <p class="muted" id="homeWeekCount"></p>
+        <div class="legend"><span><i class="dot-a"></i>左腿抗阻训练</span><span><i class="dot-b"></i>双腿关节训练</span></div>
         <div class="plan-cards" id="planCards"></div>
         <p class="notice" id="homeNotice" role="status" hidden></p>
       </div>
@@ -349,6 +352,7 @@ svg { display: block; }
         <h1 id="doneTitle">今天的训练完成了</h1>
         <p class="muted" id="doneMeta"></p>
         <div class="week" id="doneWeek" aria-label="本周训练"></div>
+        <div class="legend"><span><i class="dot-a"></i>左腿抗阻训练</span><span><i class="dot-b"></i>双腿关节训练</span></div>
         <p class="strong" id="doneCount"></p>
       </div>
       <div class="dock"><button class="primary" id="doneOk" type="button">好</button></div>
@@ -1579,17 +1583,21 @@ globalThis.RehabStore = (() => {
 
   // ---------- home ----------
   function weekStrip(el) {
-    const keys = Core.weekDates(today()), done = new Set(store.list().map(r => r.date)), now = todayKey();
+    const keys = Core.weekDates(today()), now = todayKey(), records = store.list();
+    const byDate = new Map();
+    for (const r of records) { if (!byDate.has(r.date)) byDate.set(r.date, new Set()); byDate.get(r.date).add(r.program); }
     el.replaceChildren(...keys.map((key, i) => {
       const cell = document.createElement("span");
       const dot = document.createElement("i");
-      if (done.has(key)) dot.classList.add("on");
+      const plans = byDate.get(key), hasA = plans?.has(Core.PLAN_A), hasB = plans?.has(Core.PLAN_B);
+      if (plans) dot.classList.add("on", hasA && hasB ? "both" : hasA ? "a" : "b");
       if (key === now) dot.classList.add("today");
+      const names = [hasA && "左腿抗阻", hasB && "双腿关节"].filter(Boolean).join("、");
       cell.append("一二三四五六日"[i], dot);
-      cell.setAttribute("aria-label", `${dateLabel(key)}${done.has(key) ? " 已练" : ""}`);
+      cell.setAttribute("aria-label", `${dateLabel(key)}${plans ? ` 已练 ${names}` : ""}`);
       return cell;
     }));
-    return store.list().filter(r => keys.includes(r.date)).length;
+    return records.filter(r => keys.includes(r.date)).length;
   }
   function renderHome() {
     setText($("homeDate"), dateLabel(todayKey()));

@@ -269,17 +269,21 @@
 
   // ---------- home ----------
   function weekStrip(el) {
-    const keys = Core.weekDates(today()), done = new Set(store.list().map(r => r.date)), now = todayKey();
+    const keys = Core.weekDates(today()), now = todayKey(), records = store.list();
+    const byDate = new Map();
+    for (const r of records) { if (!byDate.has(r.date)) byDate.set(r.date, new Set()); byDate.get(r.date).add(r.program); }
     el.replaceChildren(...keys.map((key, i) => {
       const cell = document.createElement("span");
       const dot = document.createElement("i");
-      if (done.has(key)) dot.classList.add("on");
+      const plans = byDate.get(key), hasA = plans?.has(Core.PLAN_A), hasB = plans?.has(Core.PLAN_B);
+      if (plans) dot.classList.add("on", hasA && hasB ? "both" : hasA ? "a" : "b");
       if (key === now) dot.classList.add("today");
+      const names = [hasA && "左腿抗阻", hasB && "双腿关节"].filter(Boolean).join("、");
       cell.append("一二三四五六日"[i], dot);
-      cell.setAttribute("aria-label", `${dateLabel(key)}${done.has(key) ? " 已练" : ""}`);
+      cell.setAttribute("aria-label", `${dateLabel(key)}${plans ? ` 已练 ${names}` : ""}`);
       return cell;
     }));
-    return store.list().filter(r => keys.includes(r.date)).length;
+    return records.filter(r => keys.includes(r.date)).length;
   }
   function renderHome() {
     setText($("homeDate"), dateLabel(todayKey()));
